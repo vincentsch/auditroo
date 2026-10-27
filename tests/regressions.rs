@@ -994,6 +994,32 @@ async fn a_sitemap_on_another_host_is_read_where_it_lives() {
         .any(|note| note.contains("auditroo fetched it there")));
 }
 
+#[tokio::test]
+async fn a_sitemap_on_another_host_that_fails_is_not_called_fetched() {
+    // Two local builds of a site often name the live sitemap in robots.txt.
+    // When auditroo can't load it, the note must say so.
+    let site = DocsSite::new().serve(None).await;
+    let sitemaps = FixtureSite::spawn().await;
+    let robots = format!(
+        "User-agent: *\nAllow: /\n\nSitemap: {}/lantern-sitemap.xml\n",
+        origin_of(&sitemaps)
+    );
+    site.set("/robots.txt", 200, "text/plain", &robots).await;
+    let report = check_site(&site).await;
+    let note = report
+        .notes
+        .iter()
+        .find(|note| note.starts_with("A sitemap is on"))
+        .unwrap_or_else(|| panic!("no sitemap note: {:?}", report.notes));
+    assert_eq!(
+        note,
+        &format!(
+            "A sitemap is on {}, but auditroo could not read it there: it returns 404.",
+            origin_of(&sitemaps)
+        )
+    );
+}
+
 // Crawls that found nothing useful never pass.
 
 fn redirect_everything(site: &mut DocsSite, prefix: &str, target: &str) {

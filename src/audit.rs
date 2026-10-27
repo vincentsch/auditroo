@@ -1,7 +1,7 @@
 //! The steps every command shares: crawl a site into a snapshot, then turn
 //! one or two snapshots into a report.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 #[cfg(feature = "browser")]
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -30,7 +30,10 @@ use crate::graph::LinkGraphAccumulator;
 use crate::progress::Progress;
 use crate::report::{Report, ReportCommand, ReportInput};
 use crate::rules::{check::check, diff::diff, start_issue};
-use crate::sitemap::{discover_sitemaps_from_urls, sitemap_seeds, SitemapDiscoveryConfig};
+use crate::sitemap::{
+    discover_sitemaps_from_urls, sitemap_seeds, SitemapDiscoveryConfig, SitemapDocumentDiagnostic,
+    SitemapDocumentOutcome,
+};
 use crate::snapshot::{
     assemble, CrawlObservation, CrawlSkipReason, CrawlTruncationReason, Snapshot, SnapshotInput,
 };
@@ -408,18 +411,41 @@ pub fn foreign_canonical_note(origin: &str) -> String {
 pub fn crawl_notes(snapshot: &Snapshot) -> Vec<String> {
     let mut notes = Vec::new();
     let site = snapshot.site();
-    let elsewhere: BTreeSet<String> = snapshot
-        .sitemap
-        .discovery
-        .documents
-        .iter()
-        .filter(|document| !site.contains(&document.requested_url))
-        .map(|document| origin_of(&document.requested_url))
-        .collect();
-    for origin in elsewhere {
-        notes.push(format!(
-            "A sitemap is on {origin}, so auditroo fetched it there. Google accepts a sitemap on another host when robots.txt names it."
-        ));
+    let mut elsewhere: BTreeMap<String, Vec<&SitemapDocumentDiagnostic>> = BTreeMap::new();
+    for document in &snapshot.sitemap.discovery.documents {
+        if !site.contains(&document.requested_url) {
+            elsewhere
+                .entry(origin_of(&document.requested_url))
+                .or_default()
+                .push(document);
+        }
+    }
+    for (origin, documents) in elsewhere {
+        let read = documents.iter().any(|document| {
+            matches!(
+                document.outcome,
+                SitemapDocumentOutcome::ParsedUrlSet | SitemapDocumentOutcome::ParsedSitemapIndex
+            )
+        });
+        if read {
+            notes.push(format!(
+                "A sitemap is on {origin}, so auditroo fetched it there. Google accepts a sitemap on another host when robots.txt names it."
+            ));
+        } else {
+            let reason = match (&documents[0].detail, documents[0].final_status) {
+                (Some(detail), _) => detail.clone(),
+                (None, Some(status)) => format!("it returns {status}"),
+                (None, None) => "it could not be loaded".to_owned(),
+            };
+            let end = if reason.ends_with(['.', '?']) {
+                ""
+            } else {
+                "."
+            };
+            notes.push(format!(
+                "A sitemap is on {origin}, but auditroo could not read it there: {reason}{end}"
+            ));
+        }
     }
     if let Some(start) = snapshot.records.get(&snapshot.start_url) {
         if start.navigation_changed() && !site.contains(&start.final_url) {
