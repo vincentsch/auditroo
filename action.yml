@@ -42,7 +42,7 @@ outputs:
     description: '"true" when no finding reached --fail-on.'
     value: ${{ steps.run.outputs.passed }}
   report:
-    description: Path to the full JSON report.
+    description: Path to the full JSON report. Empty when the command writes no report.
     value: ${{ steps.run.outputs.report }}
 
 runs:
@@ -84,12 +84,17 @@ runs:
         code=$?
         set -e
         echo "exit-code=$code" >> "$GITHUB_OUTPUT"
-        echo "report=$REPORT" >> "$GITHUB_OUTPUT"
+        if [ "$code" = 0 ] && [ ! -s "$REPORT" ]; then
+          # Commands such as "check --help" print their result and write no report.
+          echo "passed=true" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
         if [ "$code" -gt 1 ] || [ ! -s "$REPORT" ]; then
           echo "::error title=auditroo::auditroo could not finish (exit code $code). The log above has the reason."
           echo "passed=false" >> "$GITHUB_OUTPUT"
           exit "$code"
         fi
+        echo "report=$REPORT" >> "$GITHUB_OUTPUT"
         if [ "$code" = 0 ]; then
           echo "passed=true" >> "$GITHUB_OUTPUT"
         else

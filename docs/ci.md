@@ -146,7 +146,7 @@ because production ignores headers it does not know.
 | --- | --- |
 | `exit-code` | auditroo's exit code. |
 | `passed` | `true` when no finding reached `--fail-on`. |
-| `report` | Path of the full JSON report. |
+| `report` | Path of the full JSON report. Empty when the command writes no report, such as `check --help`. |
 
 The action reads `args` as shell words, so you can quote values. Never put
 text that someone else controls into `args` directly, such as a branch name
