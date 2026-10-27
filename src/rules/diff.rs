@@ -76,14 +76,22 @@ pub fn diff(baseline: &Snapshot, current: &Snapshot) -> DiffOutcome {
                                 .severity(severity),
                         );
                     }
-                } else if site.is_indexable(old) && !current.start_blocked_by_robots() {
+                } else if site.is_indexable(old)
+                    && !old.is_not_found_template()
+                    && !current.start_blocked_by_robots()
+                {
                     not_checked += 1;
                 }
             }
         }
     }
     for (key, new) in &after {
-        if !before.contains_key(key) && new.is_page() && new.is_ok() && !new.navigation_changed() {
+        if !before.contains_key(key)
+            && new.is_page()
+            && new.is_ok()
+            && !new.navigation_changed()
+            && !new.is_not_found_template()
+        {
             findings.push(Finding::new(
                 Rule::PageAdded,
                 Some(&new.url),

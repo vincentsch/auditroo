@@ -695,6 +695,37 @@ async fn one_new_broken_internal_link() {
 }
 
 #[tokio::test]
+async fn the_404_page_is_not_a_new_page() {
+    // Static site builders often give the 404 page a canonical tag that
+    // names /404.html, and the host serves that file with 200. A new broken
+    // link leads the crawl to the 404 page and from there to /404.html.
+    let mut site = DocsSite::new();
+    site.not_found = support::site::not_found_page().replace(
+        "</title>",
+        "</title><link rel=\"canonical\" href=\"{{ORIGIN}}/404.html\">",
+    );
+    site.set("/404.html", Route::html(site.not_found.clone()));
+    site.edit("/", |html| {
+        html.replace(
+            "</main>",
+            "<a href=\"/docs/does-not-exist/\">New link</a></main>",
+        )
+    });
+    let report = compare(site).await;
+    expect(
+        &report,
+        Rule::BrokenLink,
+        Severity::High,
+        Some("/docs/does-not-exist/"),
+    );
+    assert!(
+        findings(&report, Rule::PageAdded).is_empty(),
+        "{}",
+        render(&report)
+    );
+}
+
+#[tokio::test]
 async fn canonical_points_to_a_redirect() {
     let mut site = DocsSite::new();
     site.set("/docs/faq", Route::redirect(301, "/docs/faq/"));

@@ -183,6 +183,16 @@ impl SeoRecord {
         self.is_page() && self.indexability.is_indexable && !self.navigation_changed()
     }
 
+    /// The site's "page not found" template, such as /404.html. Static
+    /// hosts send it for every unknown URL, and its canonical tag often names
+    /// /404.html. So a crawl that hits one broken link also finds the
+    /// template under its own URL, where it loads with 200.
+    pub fn is_not_found_template(&self) -> bool {
+        std::iter::once(self.url.as_str())
+            .chain(self.canonical.as_deref())
+            .any(is_not_found_path)
+    }
+
     /// The redirect hops form a loop.
     pub fn redirect_loop(&self) -> bool {
         let mut seen = std::collections::BTreeSet::new();
@@ -196,6 +206,19 @@ impl SeoRecord {
             !seen.insert(target)
         })
     }
+}
+
+/// A URL whose last path part is "404", "404.html" or "404.htm".
+fn is_not_found_path(url: &str) -> bool {
+    let Ok(url) = Url::parse(url) else {
+        return false;
+    };
+    let last = url.path().trim_end_matches('/').rsplit('/').next();
+    last.is_some_and(|part| {
+        ["404", "404.html", "404.htm"]
+            .iter()
+            .any(|name| part.eq_ignore_ascii_case(name))
+    })
 }
 
 pub fn navigation_changed(record: &SeoRecord) -> bool {

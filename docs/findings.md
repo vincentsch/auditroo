@@ -205,7 +205,9 @@ temporary, so run the check again before you look further.
 
 ### `page_added`
 
-**Info.** A page exists that the old crawl did not have.
+**Info.** A page exists that the old crawl did not have. The site's 404 page
+doesn't count, for example `/404.html`, or a page whose canonical tag names
+`/404.html`.
 
 What to do: nothing. Make sure new pages are linked from the site and listed
 in the sitemap.

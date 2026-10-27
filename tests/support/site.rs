@@ -44,10 +44,11 @@ impl Route {
     }
 }
 
-/// Path to response. Unknown paths get the noindex 404 page.
+/// Path to response. Unknown paths get `not_found` with status 404.
 #[derive(Debug, Clone)]
 pub struct DocsSite {
     pub routes: BTreeMap<String, Route>,
+    pub not_found: String,
 }
 
 pub const REFERENCE_PAGES: [&str; 7] = [
@@ -221,7 +222,10 @@ impl DocsSite {
                 body: "\u{89}PNG fake image bytes".into(),
             },
         );
-        Self { routes }
+        Self {
+            routes,
+            not_found: not_found_page(),
+        }
     }
 
     /// Change one page's HTML. Panics when nothing changed, so a typo in a
@@ -300,7 +304,9 @@ impl DocsSite {
                 )
                 .await;
         }
-        server.set_not_found(not_found_page()).await;
+        server
+            .set_not_found(self.not_found.replace("{{ORIGIN}}", &origin))
+            .await;
     }
 }
 
