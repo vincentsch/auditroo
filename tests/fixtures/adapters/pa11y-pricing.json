@@ -1,0 +1,20 @@
+[
+  {
+    "type": "error",
+    "code": "WCAG2AA.Principle1.Guideline1_1.1_1_1.H37",
+    "selector": "img.hero",
+    "message": "Img element missing alt text"
+  },
+  {
+    "type": "warning",
+    "code": "WCAG2AA.Principle1.Guideline1_3.1_3_1.H42",
+    "selector": "h2",
+    "message": "Heading order should be reviewed"
+  },
+  {
+    "type": "notice",
+    "code": "notice.sample",
+    "selector": "main",
+    "message": "Manual review recommended"
+  }
+]

@@ -1,0 +1,7 @@
+# Keep LF line endings on every system, so fixtures and generated docs
+# compare byte for byte on Windows too.
+* text=auto eol=lf
+*.webp binary
+
+# Access log fixtures end with a blank line on purpose; real log files often do.
+tests/fixtures/logs/* -whitespace

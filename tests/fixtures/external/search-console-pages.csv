@@ -1,0 +1,5 @@
+Page,Clicks,Impressions,CTR,Position
+https://www.example.test/pricing,100,4000,2.5%,4
+https://www.example.test/pricing,20,1000,2.0%,8
+https://www.example.test/blog,5,200,0.025,12
+https://user:pass@example.test/private,1,10,10%,1

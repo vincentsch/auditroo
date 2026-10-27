@@ -1,0 +1,43 @@
+{
+  "lighthouseVersion": "12.0.0",
+  "requestedUrl": "https://staging.example.test/pricing",
+  "finalDisplayedUrl": "https://staging.example.test/pricing",
+  "categories": {
+    "performance": {
+      "title": "Performance",
+      "score": 0.72
+    },
+    "accessibility": {
+      "title": "Accessibility",
+      "score": 0.95
+    }
+  },
+  "audits": {
+    "largest-contentful-paint": {
+      "title": "Largest Contentful Paint",
+      "description": "Largest text or image paint.",
+      "numericValue": 2500,
+      "numericUnit": "millisecond"
+    },
+    "cumulative-layout-shift": {
+      "title": "Cumulative Layout Shift",
+      "numericValue": 0.18,
+      "numericUnit": "unitless"
+    },
+    "total-blocking-time": {
+      "title": "Total Blocking Time",
+      "numericValue": 250,
+      "numericUnit": "millisecond"
+    },
+    "speed-index": {
+      "title": "Speed Index",
+      "numericValue": 3100,
+      "numericUnit": "millisecond"
+    },
+    "total-byte-weight": {
+      "title": "Total Byte Weight",
+      "numericValue": 900000,
+      "numericUnit": "byte"
+    }
+  }
+}

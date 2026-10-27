@@ -1,0 +1,54 @@
+# Checks for checkout and pricing pages. Replace each PLACEHOLDER_ value
+# before you run auditroo with this config.
+
+[[extract]]
+id = "checkout-staging-host"
+kind = "regex"
+include = ["/checkout*", "/pricing*"]
+source = "body"
+pattern = "PLACEHOLDER_STAGING_HOST_PATTERN"
+
+[[extract]]
+id = "checkout-analytics-tag"
+kind = "regex"
+include = ["/checkout*", "/pricing*"]
+source = "body"
+pattern = "PLACEHOLDER_ANALYTICS_ID"
+
+[[assert]]
+id = "checkout-no-staging-host"
+extractor = "checkout-staging-host"
+include = ["/checkout*", "/pricing*"]
+operator = "missing"
+severity = "critical"
+
+[[assert]]
+id = "checkout-analytics-present"
+extractor = "checkout-analytics-tag"
+include = ["/checkout*", "/pricing*"]
+operator = "exists"
+severity = "high"
+
+[[assert]]
+id = "checkout-canonical-host"
+field = "canonical"
+include = ["/checkout*", "/pricing*"]
+operator = "url_allowed_host"
+allowed_hosts = ["PLACEHOLDER_PRODUCTION_HOST"]
+severity = "critical"
+
+[[assert]]
+id = "checkout-redirect-hosts"
+field = "redirect_chain"
+include = ["/checkout*", "/pricing*"]
+operator = "url_allowed_host"
+allowed_hosts = ["PLACEHOLDER_PRODUCTION_HOST"]
+severity = "critical"
+
+[[assert]]
+id = "checkout-indexable"
+field = "indexability.is_indexable"
+include = ["/checkout*", "/pricing*"]
+operator = "equals"
+expected = true
+severity = "high"

@@ -1,0 +1,106 @@
+name: auditroo
+description: Checks a preview deployment for SEO mistakes and fails the job when a change would hurt search.
+author: Vincent Schmalbach
+branding:
+  icon: search
+  color: red
+
+inputs:
+  args:
+    description: >
+      The auditroo command and its arguments, for example
+      "compare https://example.com https://my-branch.example.vercel.app".
+      They are read as shell words, so quote values with spaces. The action
+      writes the JSON report itself, so leave out --out. Do not put text
+      that someone else controls here, such as pull request titles.
+    required: true
+  version:
+    description: >
+      auditroo release to install. The default is the release that matches
+      this version of the action, so pinning the action also pins auditroo.
+      "latest" installs the newest release. "path" uses an auditroo that is
+      already on PATH.
+    default: v0.1.0
+  fail:
+    description: Fail the step when auditroo finds problems at or above --fail-on.
+    default: "true"
+  summary:
+    description: Add the report as Markdown to the job summary.
+    default: "true"
+  annotations:
+    description: Show findings as annotations on the run and the pull request.
+    default: "true"
+  html:
+    description: Also write a standalone HTML report to this path, for example to upload as an artifact.
+    default: ""
+
+outputs:
+  exit-code:
+    description: auditroo's exit code. 0 passed, 1 problems found, 2 usage or config error, 3 network or runtime error.
+    value: ${{ steps.run.outputs.exit-code }}
+  passed:
+    description: '"true" when no finding reached --fail-on.'
+    value: ${{ steps.run.outputs.passed }}
+  report:
+    description: Path to the full JSON report.
+    value: ${{ steps.run.outputs.report }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install auditroo
+      if: inputs.version != 'path'
+      shell: bash
+      env:
+        AUDITROO_VERSION: ${{ inputs.version }}
+        INSTALL_DIR: ${{ runner.temp }}/auditroo-bin
+      run: |
+        if [ "$AUDITROO_VERSION" = latest ]; then unset AUDITROO_VERSION; fi
+        sh "$GITHUB_ACTION_PATH/install.sh"
+        echo "$INSTALL_DIR" >> "$GITHUB_PATH"
+
+    - name: Run auditroo
+      id: run
+      shell: bash
+      env:
+        AUDITROO_ARGS: ${{ inputs.args }}
+        AUDITROO_HTML: ${{ inputs.html }}
+        AUDITROO_SUMMARY: ${{ inputs.summary }}
+        AUDITROO_ANNOTATIONS: ${{ inputs.annotations }}
+        AUDITROO_FAIL: ${{ inputs.fail }}
+        REPORT: ${{ runner.temp }}/auditroo-report.json
+      run: |
+        case " $AUDITROO_ARGS " in
+          *" --out "* | *" --out="*)
+            echo "::error title=auditroo::Leave --out out of args. The action writes the report itself and sets the report output."
+            exit 2
+            ;;
+        esac
+        set +e
+        extra=(--out "$REPORT")
+        if [ -n "$AUDITROO_HTML" ]; then extra+=(--html "$AUDITROO_HTML"); fi
+        # The arguments are shell words written in the workflow file.
+        eval "auditroo $AUDITROO_ARGS" '"${extra[@]}"'
+        code=$?
+        set -e
+        echo "exit-code=$code" >> "$GITHUB_OUTPUT"
+        echo "report=$REPORT" >> "$GITHUB_OUTPUT"
+        if [ "$code" -gt 1 ] || [ ! -s "$REPORT" ]; then
+          echo "::error title=auditroo::auditroo could not finish (exit code $code). The log above has the reason."
+          echo "passed=false" >> "$GITHUB_OUTPUT"
+          exit "$code"
+        fi
+        if [ "$code" = 0 ]; then
+          echo "passed=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "passed=false" >> "$GITHUB_OUTPUT"
+        fi
+        if [ "$AUDITROO_SUMMARY" = true ]; then
+          auditroo report "$REPORT" --format markdown >> "$GITHUB_STEP_SUMMARY"
+        fi
+        if [ "$AUDITROO_ANNOTATIONS" = true ]; then
+          auditroo report "$REPORT" --format github
+        fi
+        if [ "$code" = 1 ] && [ "$AUDITROO_FAIL" = true ]; then
+          exit 1
+        fi

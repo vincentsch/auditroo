@@ -1,0 +1,61 @@
+# Checks for a documentation site. Replace PLACEHOLDER_PRODUCTION_HOST
+# before you run auditroo with this config.
+
+[[extract]]
+id = "docs-breadcrumb-nodes"
+kind = "json_ld"
+include = ["/docs/*"]
+schema_type = "BreadcrumbList"
+
+[[extract]]
+id = "docs-article-nodes"
+kind = "json_ld"
+include = ["/docs/*"]
+schema_type = "Article"
+
+[[assert]]
+id = "docs-title-present"
+field = "title"
+include = ["/docs/*"]
+operator = "exists"
+severity = "medium"
+
+[[assert]]
+id = "docs-meta-description-present"
+field = "meta_description"
+include = ["/docs/*"]
+operator = "exists"
+severity = "medium"
+
+[[assert]]
+id = "docs-single-h1"
+field = "headings.h1"
+include = ["/docs/*"]
+operator = "count_between"
+min = 1
+max = 1
+severity = "high"
+
+[[assert]]
+id = "docs-canonical-host"
+field = "canonical"
+include = ["/docs/*"]
+operator = "url_allowed_host"
+allowed_hosts = ["PLACEHOLDER_PRODUCTION_HOST"]
+severity = "critical"
+
+[[assert]]
+id = "docs-breadcrumb-present"
+extractor = "docs-breadcrumb-nodes"
+include = ["/docs/*"]
+operator = "count_min"
+min = 1
+severity = "medium"
+
+[[assert]]
+id = "docs-article-shape"
+extractor = "docs-article-nodes"
+include = ["/docs/*"]
+operator = "json_shape"
+required = [{ pointer = "/headline" }, { pointer = "/dateModified" }]
+severity = "medium"

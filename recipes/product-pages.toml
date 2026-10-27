@@ -1,0 +1,41 @@
+# Checks for product pages. Replace PLACEHOLDER_PRODUCTION_HOST before you
+# run auditroo with this config.
+
+[[extract]]
+id = "product-nodes"
+kind = "json_ld"
+include = ["/products/*"]
+schema_type = "Product"
+
+[[assert]]
+id = "product-node-count"
+extractor = "product-nodes"
+include = ["/products/*"]
+operator = "count_between"
+min = 1
+max = 1
+severity = "high"
+
+[[assert]]
+id = "product-offer-shape"
+extractor = "product-nodes"
+include = ["/products/*"]
+operator = "json_shape"
+required = [{ pointer = "/offers/price" }, { pointer = "/offers/availability", type = "string" }]
+severity = "high"
+
+[[assert]]
+id = "product-canonical-host"
+field = "canonical"
+include = ["/products/*"]
+operator = "url_allowed_host"
+allowed_hosts = ["PLACEHOLDER_PRODUCTION_HOST"]
+severity = "critical"
+
+[[assert]]
+id = "product-indexable"
+field = "indexability.is_indexable"
+include = ["/products/*"]
+operator = "equals"
+expected = true
+severity = "high"

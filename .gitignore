@@ -1,0 +1,18 @@
+# Rust build output
+/target/
+**/*.rs.bk
+*.pdb
+
+# Environment files with secrets
+.env
+
+# Crawl snapshots and local report output (used in examples/tests)
+/.auditroo/
+/snapshots/
+*.auditroo.json
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

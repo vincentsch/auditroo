@@ -1,0 +1,21 @@
+{
+  "messages": [
+    {
+      "type": "error",
+      "message": "Element div not allowed as child of element ul.",
+      "firstLine": 12,
+      "firstColumn": 3
+    },
+    {
+      "type": "info",
+      "subType": "warning",
+      "message": "The type attribute is unnecessary for JavaScript resources.",
+      "lastLine": 2,
+      "lastColumn": 12
+    },
+    {
+      "type": "info",
+      "message": "Trailing slash on void elements has no effect."
+    }
+  ]
+}

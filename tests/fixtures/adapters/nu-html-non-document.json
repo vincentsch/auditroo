@@ -1,0 +1,8 @@
+{
+  "messages": [
+    {
+      "type": "non-document-error",
+      "message": "HTTP resource could not be loaded."
+    }
+  ]
+}
