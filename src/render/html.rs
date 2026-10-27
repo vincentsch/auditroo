@@ -1,6 +1,10 @@
 //! A standalone HTML report: one file with inline styles and no scripts,
 //! good to attach to a pull request or send to a client.
 
+use std::sync::OnceLock;
+
+use regex::Regex;
+
 use super::{
     format_time, groups, headline, impact_line, scope_sentence, site_for, summary_lines, Group,
 };
@@ -36,7 +40,7 @@ pub fn render_with_logs(report: &Report, logs: Option<&LogAnalysisReport>) -> St
         escape(report.command.as_str()),
         if report.passed { "PASS" } else { "FAIL" },
         escape(&headline(report)),
-        escape(&scope_sentence(report)),
+        prose(&scope_sentence(report)),
         report.fail_on,
         format_count(report.current.pages),
         escape(&format_time(report.created_at)),
@@ -67,7 +71,7 @@ pub fn render_with_logs(report: &Report, logs: Option<&LogAnalysisReport>) -> St
                 "<li><span class=\"pill sev-{}\">{}</span> {}</li>\n",
                 line.severity.as_str(),
                 line.severity.title(),
-                escape(&line.text)
+                prose(&line.text)
             ));
         }
         html.push_str("</ul>\n</section>\n");
@@ -101,7 +105,7 @@ pub fn render_with_logs(report: &Report, logs: Option<&LogAnalysisReport>) -> St
     if !report.notes.is_empty() {
         html.push_str("<section class=\"notes\">\n<h2>Notes</h2>\n<ul>\n");
         for note in &report.notes {
-            html.push_str(&format!("<li>{}</li>\n", escape(note)));
+            html.push_str(&format!("<li>{}</li>\n", prose(note)));
         }
         html.push_str("</ul>\n</section>\n");
     }
@@ -152,7 +156,7 @@ fn render_group(html: &mut String, group: &Group<'_>, report: &Report, site: &Si
         } else {
             ""
         },
-        escape(group.rule.advice())
+        prose(group.rule.advice())
     ));
     if group.collapsed() {
         let urls: Vec<&str> = group
@@ -208,10 +212,10 @@ fn render_finding(html: &mut String, finding: &Finding, report: &Report, site: &
         html.push_str("</table>\n");
     }
     for detail in &finding.details {
-        html.push_str(&format!("<p class=\"detail\">{}</p>\n", escape(detail)));
+        html.push_str(&format!("<p class=\"detail\">{}</p>\n", prose(detail)));
     }
     if let Some(line) = impact_line(report, finding) {
-        html.push_str(&format!("<p class=\"detail\">{}</p>\n", escape(&line)));
+        html.push_str(&format!("<p class=\"detail\">{}</p>\n", prose(&line)));
     }
     if !finding.related.is_empty() {
         let total = finding.related_total.max(finding.related.len());
@@ -263,8 +267,8 @@ fn push_url_list<'a>(
 
 fn sentence_html(finding: &Finding, site: &Site) -> String {
     match &finding.url {
-        Some(url) => format!("{} {}", link(url, site), escape(&finding.message)),
-        None => escape(&super::capitalize(&finding.message)),
+        Some(url) => format!("{} {}", link(url, site), prose(&finding.message)),
+        None => prose(&super::capitalize(&finding.message)),
     }
 }
 
@@ -283,6 +287,17 @@ fn link(url: &str, site: &Site) -> String {
 
 fn capitalize_label(label: &str) -> String {
     super::capitalize(label)
+}
+
+/// Escaped text in which flags such as --production-url stay on one line.
+/// A browser may otherwise break the line at a hyphen inside the flag.
+fn prose(text: &str) -> String {
+    static FLAG: OnceLock<Regex> = OnceLock::new();
+    let flag = FLAG.get_or_init(|| {
+        Regex::new(r"(^|[\s(])(--[a-z][a-z0-9-]*[a-z0-9])").expect("the flag pattern is valid")
+    });
+    flag.replace_all(&escape(text), "$1<span class=\"flag\">$2</span>")
+        .into_owned()
 }
 
 fn escape(text: &str) -> String {
@@ -366,6 +381,7 @@ h4 { font-size: 16px; margin: 0; }
 .group > header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .gate { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--critical); text-transform: uppercase; letter-spacing: 0.05em; }
 .advice { color: var(--muted); margin: 8px 0 4px; }
+.flag { white-space: nowrap; }
 .finding { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 12px; }
 .what { margin: 0 0 6px; overflow-wrap: anywhere; }
 .url { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13.5px; font-weight: 600; }
@@ -395,3 +411,21 @@ footer { margin-top: 40px; color: var(--muted); font-size: 13px; }
   .group, .top, .tile { border-color: #ccc; }
 }
 "#;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn flags_stay_on_one_line() {
+        assert_eq!(
+            prose("pass --production-url with the live site (--max-pages), not a--b"),
+            "pass <span class=\"flag\">--production-url</span> with the live site (<span class=\"flag\">--max-pages</span>), not a--b"
+        );
+        assert_eq!(
+            prose("--quiet & more"),
+            "<span class=\"flag\">--quiet</span> &amp; more"
+        );
+        assert!(STYLE.contains(".flag { white-space: nowrap; }"));
+    }
+}

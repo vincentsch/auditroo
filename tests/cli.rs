@@ -76,6 +76,8 @@ fn demo_shows_a_failing_comparison_without_network() {
     assert_eq!(report["passed"], false);
     let html = std::fs::read_to_string(dir.path().join("demo.html")).unwrap();
     assert!(html.contains("<html"));
+    // Narrow screens must not break the line inside a flag.
+    assert!(html.contains("pass <span class=\"flag\">--production-url</span> with"));
 
     auditroo(&dir)
         .args(["demo", "--format", "markdown"])
