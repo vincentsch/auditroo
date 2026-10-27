@@ -1,5 +1,4 @@
 target/
-.git/
-.vroni/
+.*
 *.json
 !Cargo.lock
