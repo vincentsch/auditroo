@@ -95,6 +95,11 @@ The supported formats are:
 looks for in the User-Agent. A User-Agent can be faked, so treat the
 result as what clients claim to be.
 
+When an AI crawler gets 401, 403 or 429 answers, auditroo reports that once
+per site section. If search engines could fetch the same URLs, the finding
+is `ai_bot_access_differs_from_search_bot`. Otherwise it is
+`ai_bot_blocked`.
+
 Log sources can also live in `auditroo.toml`:
 
 ```toml

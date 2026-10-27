@@ -478,14 +478,15 @@ pub fn render_log_human(report: &LogAnalysisReport) -> String {
         .filter(|family| family.blocked == family.requests)
         .map(|family| family.name.as_str())
         .collect();
-    // Blocks per site section come from the ai_bot_blocked findings, so this
-    // summary and the findings below always agree.
+    // Blocks per site section come from the findings for blocked AI
+    // crawlers, so this summary and the findings below always agree.
     let mut by_section: BTreeMap<String, Vec<String>> = BTreeMap::new();
-    for finding in report
-        .findings
-        .iter()
-        .filter(|finding| finding.finding_type == LogFindingType::AiBotBlocked)
-    {
+    for finding in report.findings.iter().filter(|finding| {
+        matches!(
+            finding.finding_type,
+            LogFindingType::AiBotBlocked | LogFindingType::AiBotAccessDiffersFromSearchBot
+        )
+    }) {
         let name = finding
             .bot_family
             .as_deref()
@@ -529,22 +530,46 @@ pub fn render_log_human(report: &LogAnalysisReport) -> String {
             ),
         )
     });
+    // A crawler blocked in several sections gets one line that names them
+    // all. Findings for single URLs get a line each.
+    let mut lines: Vec<Vec<&LogFinding>> = Vec::new();
+    let mut section_lines: BTreeMap<_, usize> = BTreeMap::new();
+    for finding in &active {
+        if finding.normalized_url.is_some() {
+            lines.push(vec![finding]);
+            continue;
+        }
+        let key = (
+            finding.finding_type,
+            finding.bot_family.as_deref(),
+            finding.message.as_str(),
+            finding.effective_severity,
+        );
+        match section_lines.get(&key) {
+            Some(&index) => lines[index].push(*finding),
+            None => {
+                section_lines.insert(key, lines.len());
+                lines.push(vec![finding]);
+            }
+        }
+    }
     out.push_str("\nFindings\n");
-    if active.is_empty() {
+    if lines.is_empty() {
         out.push_str("  none\n");
     }
-    for finding in active.iter().take(30) {
+    for line in lines.iter().take(30) {
         out.push_str(&format!(
             "  {:<8}{}\n",
-            finding
+            line[0]
                 .effective_severity
                 .map(|severity| severity.as_str())
                 .unwrap_or("-"),
-            human_log_finding(finding, report)
+            human_log_line(line, report)
         ));
     }
-    if active.len() > 30 {
-        out.push_str(&format!("  and {} more\n", active.len() - 30));
+    let hidden: usize = lines.iter().skip(30).map(Vec::len).sum();
+    if hidden > 0 {
+        out.push_str(&format!("  and {hidden} more\n"));
     }
     let ignored = report.findings.len() - active.len();
     if ignored > 0 {
@@ -912,7 +937,13 @@ impl<'a> LogAnalysisBuilder<'a> {
             );
         }
 
-        if (400..=599).contains(&entry.status) {
+        // A 401, 403 or 429 for an AI crawler is a block. The section
+        // findings for blocked AI crawlers report it, so it is not counted a
+        // second time as an error here.
+        let ai_block = entry.client_type == ClientType::AiBot
+            && is_attention_method
+            && is_blocked_status(entry.status);
+        if (400..=599).contains(&entry.status) && !ai_block {
             let class = status_class(entry.status);
             let severity = if class == "5xx" {
                 Severity::High
@@ -1006,8 +1037,16 @@ impl<'a> LogAnalysisBuilder<'a> {
             .into_values()
             .map(FindingAccumulator::into_finding)
             .collect::<Vec<_>>();
-        findings.extend(self.ai_blocked_findings());
-        findings.extend(self.ai_access_diff_findings());
+        // A blocked AI crawler is reported once per section, under the most
+        // specific rule. "Blocked where search engines could fetch the same
+        // URLs" wins over "blocked", and its context has the block counts.
+        let access_diffs = self.ai_access_diff_findings();
+        findings.extend(self.ai_blocked_findings().into_iter().filter(|blocked| {
+            !access_diffs.iter().any(|diff| {
+                diff.group_key == blocked.group_key && diff.bot_family == blocked.bot_family
+            })
+        }));
+        findings.extend(access_diffs);
         if absence.absence_findings_eligible {
             findings.extend(self.absence_findings());
         }
@@ -1248,6 +1287,8 @@ impl<'a> LogAnalysisBuilder<'a> {
                 }
             }
             let mut related = BTreeMap::new();
+            related.insert("blocked_count".to_owned(), json!(stats.blocked_count));
+            related.insert("eligible_count".to_owned(), json!(stats.eligible_count));
             related.insert("shared_url_count".to_owned(), json!(shared_urls.len()));
             related.insert(
                 "shared_urls".to_owned(),
@@ -2384,24 +2425,34 @@ fn family_display_name(report: &LogAnalysisReport, family: &str) -> String {
         .unwrap_or_else(|| family.to_owned())
 }
 
-fn human_log_finding(finding: &LogFinding, report: &LogAnalysisReport) -> String {
-    let place = finding
-        .normalized_url
-        .as_deref()
-        .and_then(|url| url::Url::parse(url).ok())
-        .map(|url| crate::crawl::url::path_and_query(&url))
-        .unwrap_or_else(|| finding.display_path.clone());
-    let who = finding
+/// One line of the findings list. The findings share rule, bot and message
+/// and differ only in where they happened.
+fn human_log_line(findings: &[&LogFinding], report: &LogAnalysisReport) -> String {
+    let first = findings[0];
+    let places: Vec<String> = findings
+        .iter()
+        .map(|finding| {
+            finding
+                .normalized_url
+                .as_deref()
+                .and_then(|url| url::Url::parse(url).ok())
+                .map(|url| crate::crawl::url::path_and_query(&url))
+                .unwrap_or_else(|| finding.display_path.clone())
+        })
+        .collect();
+    let who = first
         .bot_family
         .as_deref()
         .map(|family| family_display_name(report, family))
         .unwrap_or_else(|| "bots".to_owned());
+    let count: u64 = findings.iter().map(|finding| finding.request_count).sum();
     format!(
-        "{place}: {} ({who}, {} request{}, {})",
-        finding.message,
-        thousands(finding.request_count),
-        if finding.request_count == 1 { "" } else { "s" },
-        finding.finding_type.as_str()
+        "{}: {} ({who}, {} request{}, {})",
+        places.join(", "),
+        first.message,
+        thousands(count),
+        if count == 1 { "" } else { "s" },
+        first.finding_type.as_str()
     )
 }
 
@@ -2652,11 +2703,76 @@ mod tests {
         let blocked: Vec<&LogFinding> = report
             .findings
             .iter()
-            .filter(|finding| finding.finding_type == LogFindingType::AiBotBlocked)
+            .filter(|finding| {
+                matches!(
+                    finding.finding_type,
+                    LogFindingType::AiBotBlocked | LogFindingType::AiBotAccessDiffersFromSearchBot
+                )
+            })
             .collect();
         assert_eq!(blocked.len(), 1);
         assert_eq!(blocked[0].group_key, "path:/coffee");
         assert_eq!(blocked[0].display_path, "/coffee/");
+    }
+
+    #[test]
+    fn a_blocked_ai_crawler_is_reported_once() {
+        // GPTBot gets 403 on three URLs that Googlebot can fetch. That used to
+        // be three findings per section and one per URL. Now it is one
+        // finding per section, under the most specific rule, and one line in
+        // the text.
+        let report = analyze_combined_log(
+            "\
+203.0.113.1 - - [10/Oct/2000:13:55:36 -0700] \"GET /coffee/ HTTP/1.1\" 200 1 \"-\" \"Googlebot/2.1\"\n\
+203.0.113.1 - - [10/Oct/2000:13:55:37 -0700] \"GET /coffee/house-blend/ HTTP/1.1\" 200 1 \"-\" \"Googlebot/2.1\"\n\
+203.0.113.1 - - [10/Oct/2000:13:55:38 -0700] \"GET /about/ HTTP/1.1\" 200 1 \"-\" \"Googlebot/2.1\"\n\
+203.0.113.1 - - [10/Oct/2000:13:56:36 -0700] \"GET /coffee/ HTTP/1.1\" 403 1 \"-\" \"GPTBot/1.0\"\n\
+203.0.113.1 - - [10/Oct/2000:13:56:37 -0700] \"GET /coffee/house-blend/ HTTP/1.1\" 403 1 \"-\" \"GPTBot/1.0\"\n\
+203.0.113.1 - - [10/Oct/2000:13:56:38 -0700] \"GET /about/ HTTP/1.1\" 403 1 \"-\" \"GPTBot/1.0\"\n\
+203.0.113.1 - - [10/Oct/2000:13:56:39 -0700] \"GET /gone/ HTTP/1.1\" 404 1 \"-\" \"GPTBot/1.0\"\n",
+            LogAnalysisSettings::default(),
+        );
+
+        let rules: Vec<(LogFindingType, &str)> = report
+            .findings
+            .iter()
+            .map(|finding| (finding.finding_type, finding.display_path.as_str()))
+            .collect();
+        assert_eq!(
+            rules,
+            vec![
+                (LogFindingType::Bot4xxOr5xx, "/gone/"),
+                (LogFindingType::AiBotAccessDiffersFromSearchBot, "/about/"),
+                (LogFindingType::AiBotAccessDiffersFromSearchBot, "/coffee/"),
+            ],
+            "{:#?}",
+            report.findings
+        );
+        // The block counts of the section stay in the JSON.
+        let coffee = &report.findings[2];
+        assert_eq!(coffee.related_context["blocked_count"], json!(2));
+        assert_eq!(coffee.related_context["eligible_count"], json!(2));
+
+        let rendered = render_log_human(&report);
+        let findings = rendered.split("\nFindings\n").nth(1).unwrap();
+        let blocked: Vec<&str> = findings
+            .lines()
+            .filter(|line| line.contains("GPTBot") && line.contains("blocked"))
+            .collect();
+        assert_eq!(
+            blocked,
+            vec!["  medium  /about/, /coffee/: this AI bot was blocked on URLs that search engine bots could fetch (GPTBot (OpenAI training), 3 requests, ai_bot_access_differs_from_search_bot)"],
+            "{rendered}"
+        );
+        assert!(
+            rendered.contains("AI crawlers got blocked responses here:\n  /about/: GPTBot (OpenAI training)\n  /coffee/: GPTBot (OpenAI training)\n"),
+            "{rendered}"
+        );
+        // A 404 is an error, not a block, so it keeps its own finding.
+        assert!(
+            findings.contains("/gone/: a bot got an error response (GPTBot"),
+            "{rendered}"
+        );
     }
 
     #[test]
