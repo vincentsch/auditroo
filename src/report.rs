@@ -391,6 +391,28 @@ mod tests {
     use crate::config::IgnoreRuleSource;
 
     #[test]
+    fn a_url_pattern_without_a_star_matches_only_that_path_and_query() {
+        // As docs/configuration.md says under "URL patterns".
+        let matches = |pattern: &str, url: &str| url_matches(pattern, url);
+        assert!(matches("/docs/", "https://example.test/docs/"));
+        assert!(!matches("/docs/", "https://example.test/docs"));
+        assert!(!matches("/docs/", "https://example.test/docs/?page=2"));
+        assert!(!matches("/docs/", "https://example.test/docs/setup/"));
+        assert!(!matches("/DOCS/", "https://example.test/docs/"));
+        assert!(matches("/blog/*", "https://example.test/blog/"));
+        assert!(matches("/blog/*", "https://example.test/blog/a/b"));
+        assert!(matches("/search*", "https://example.test/search?q=shoes"));
+        assert!(matches(
+            "https://example.test/docs/",
+            "https://example.test/docs/"
+        ));
+        assert!(!matches(
+            "https://www.example.test/docs/",
+            "https://preview.example.test/docs/"
+        ));
+    }
+
+    #[test]
     fn ignore_rules_match_rule_url_and_assertion() {
         let finding = Finding::new(
             Rule::TitleChanged,

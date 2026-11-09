@@ -50,10 +50,22 @@ ignore = [
 | `respect_robots` | `true` | Set to `false` to crawl pages that robots.txt blocks for auditroo. Same as `--ignore-robots`. In `compare` it applies to production too. |
 | `render_js` | `false` | Render pages in headless Chrome. See [JavaScript sites](javascript.md). |
 
-Patterns match the path and query of a URL, so they start with `/` or `*`.
+### URL patterns
+
+The `include` and `exclude` lists use these patterns. So does the `url` of
+an ignore rule when it starts with `/`. Patterns match the path and query
+of a URL, so they start with `/` or `*`.
+
+A pattern without `*` matches only that exact path and query. Case
+matters. `/docs/` matches the page `/docs/`, but none of these:
+
+- `/docs`, without the slash at the end
+- `/docs/?page=2`, with a query string
+- `/docs/setup/`, a page under it
+
 A `*` stands for any text, including `/`. Some examples:
 
-- `/blog/*` matches every page under `/blog/`.
+- `/blog/*` matches `/blog/` itself and every page under it.
 - `/search*` matches `/search?q=shoes`.
 - `*?sort=*` matches every URL with a `sort` parameter.
 
@@ -88,7 +100,7 @@ you set matches:
 | Part | Matches |
 | --- | --- |
 | `rule` | The rule id, such as `title_changed`. The output shows it under each finding that fails the run, and [Findings](findings.md) lists them all. |
-| `url` | The finding's URL. A pattern that starts with `/` matches the path and query. You can also give a full URL such as `https://www.example.com/promo/*`. |
+| `url` | The finding's URL. A pattern that starts with `/` matches the path and query, as [URL patterns](#url-patterns) explains. You can also give a full URL such as `https://www.example.com/promo/*`. It must then match the host too, and in `compare` that is the preview's host. |
 | `assertion` | The id of one of your own checks. |
 
 Some examples:

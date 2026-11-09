@@ -159,6 +159,9 @@ ignore = [
 ]
 ```
 
+A `url` without `*`, such as `"/docs/"`, matches only that exact path and
+query. "URL patterns" in `docs/configuration.md` has the details.
+
 Never ignore a whole rule such as `noindex_added` or `robots_blocked` for
 every URL without the user's clear agreement.
 
