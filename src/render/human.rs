@@ -3,7 +3,8 @@
 use std::time::Duration;
 
 use super::{
-    capitalize, groups, headline, scope_sentence, site_for, summary_lines, url_list, Group,
+    capitalize, groups, headline, incomplete_line, scope_sentence, site_for, summary_lines,
+    url_list, Group,
 };
 use crate::findings::{Finding, Severity};
 use crate::report::{Report, ReportCommand};
@@ -62,6 +63,11 @@ pub fn render(report: &Report, options: HumanOptions) -> String {
     for line in summary_lines(report).iter().filter(|line| line.fails) {
         out.push_str(&format!("  - {}\n", line.text));
     }
+    if let Some(line) = incomplete_line(report) {
+        out.push('\n');
+        out.push_str(&style.paint("33", &line));
+        out.push('\n');
+    }
 
     for severity in Severity::ALL_DESCENDING {
         let failing: Vec<&Group<'_>> = groups
@@ -95,16 +101,14 @@ pub fn render(report: &Report, options: HumanOptions) -> String {
         out.push_str(&style.paint("1", &title));
         out.push('\n');
         for group in passing {
+            let label = format!("{:<6}", group.severity.as_str());
             if group.severity == Severity::Info {
                 out.push_str(&format!(
                     "  {}  {}\n",
-                    style.severity(group.severity, "info  "),
+                    style.severity(group.severity, &label),
                     group.summary()
                 ));
-                continue;
-            }
-            let label = format!("{:<6}", group.severity.as_str());
-            if group.collapsed() || group.findings.len() > 1 {
+            } else if group.collapsed() || group.findings.len() > 1 {
                 out.push_str(&format!(
                     "  {}  {}\n",
                     style.severity(group.severity, &label),
@@ -138,6 +142,11 @@ pub fn render(report: &Report, options: HumanOptions) -> String {
                     out.push_str(&format!("          {line}\n"));
                 }
             }
+            // The rule id is what an ignore rule needs.
+            out.push_str(&format!(
+                "          {}\n",
+                style.paint("2", &group.ignore_key())
+            ));
         }
     }
 
@@ -166,7 +175,7 @@ pub fn render(report: &Report, options: HumanOptions) -> String {
     }
     out.push('\n');
     if report.findings.is_empty() && report.command != ReportCommand::Check {
-        if report.current.truncated || report.not_compared > 0 {
+        if report.incomplete() {
             out.push_str(
                 "Nothing changed on the pages both crawls reached. Some pages were not compared. The notes say why.\n",
             );

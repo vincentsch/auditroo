@@ -574,22 +574,106 @@ async fn hreflang_points_to_a_missing_page() {
 
 #[tokio::test]
 async fn robots_txt_blocks_a_section() {
+    // The new rule also blocks auditroo, which production's robots.txt let
+    // in. The pages behind the rule are still checked, so a problem there
+    // shows up without --ignore-robots.
     let mut site = DocsSite::new();
     site.edit("/robots.txt", |robots| {
         robots.replace("Allow: /", "Allow: /\nDisallow: /docs/de/")
     });
+    site.edit("/docs/de/abnahme/", |html| {
+        html.replace(
+            "</head>",
+            "<meta name=\"robots\" content=\"noindex\"></head>",
+        )
+    });
+    site.edit("/docs/de/fuer-empfaenger/", |html| {
+        html.replace("</main>", "<a href=\"/docs/de/neu/\">Neu</a></main>")
+    });
     let report = compare(site).await;
-    let finding = expect(&report, Rule::RobotsBlocked, Severity::Critical, None);
+    let finding = expect(
+        &report,
+        Rule::RobotsBlocked,
+        Severity::Critical,
+        Some("/robots.txt"),
+    );
     assert!(finding.message.contains("Googlebot"));
     assert_eq!(finding.related_total, 2);
-    expect_failing(&report, &[Rule::RobotsBlocked]);
+    expect(
+        &report,
+        Rule::NoindexAdded,
+        Severity::Critical,
+        Some("/docs/de/abnahme/"),
+    );
+    expect(
+        &report,
+        Rule::BrokenLink,
+        Severity::High,
+        Some("/docs/de/neu/"),
+    );
+    expect_failing(
+        &report,
+        &[Rule::RobotsBlocked, Rule::NoindexAdded, Rule::BrokenLink],
+    );
+    assert!(report.current.robots_denied.is_empty());
+    assert!(!report.incomplete(), "{:?}", report.notes);
+}
+
+#[tokio::test]
+async fn urls_that_robots_txt_still_blocks_are_listed() {
+    // Both sides block auditroo from the German docs, so neither crawl
+    // checks them. The report says which URLs, before the findings.
+    let mut site = DocsSite::new();
+    site.edit("/robots.txt", |robots| {
+        robots.replace("Allow: /", "Allow: /\nDisallow: /docs/de/")
+    });
+    let base = site.serve(None).await;
+    let baseline = crawl_site(&base, None).await;
+    site.edit("/docs/faq/", |html| {
+        html.replace(
+            "</head>",
+            "<meta name=\"robots\" content=\"noindex\"></head>",
+        )
+    });
+    let preview = site.serve(None).await;
+    let report = diff_with(&baseline, &preview).await;
+    expect_failing(&report, &[Rule::NoindexAdded]);
+
+    let denied: Vec<&str> = report
+        .current
+        .robots_denied
+        .iter()
+        .map(|url| url.strip_prefix(&origin_of(&preview)).unwrap())
+        .collect();
+    assert_eq!(denied, ["/docs/de/abnahme/", "/docs/de/fuer-empfaenger/"]);
+    let note = report
+        .notes
+        .iter()
+        .find(|note| note.starts_with("robots.txt blocks auditroo"))
+        .expect("a note about the blocked URLs");
     assert!(
-        report
-            .notes
-            .iter()
-            .any(|note| note.contains("could not be checked")),
-        "{:?}",
-        report.notes
+        note.contains("not checked: /docs/de/abnahme/, /docs/de/fuer-empfaenger/."),
+        "{note}"
+    );
+
+    let text = render(&report);
+    let warning = text
+        .find("This result is incomplete, because robots.txt blocks auditroo from 2 URLs.")
+        .expect("the incomplete line");
+    let first_finding = text.find("Critical").expect("the findings");
+    assert!(warning < first_finding, "{text}");
+    let markdown = auditroo::render::markdown::render(&report);
+    assert!(
+        markdown.contains("> [!WARNING]\n> This result is incomplete"),
+        "{markdown}"
+    );
+    let html = auditroo::render::html::render(&report);
+    assert!(html.contains("<p class=\"incomplete\">This result is incomplete"));
+    let json: serde_json::Value =
+        serde_json::from_str(&auditroo::report::render_json(&report)).unwrap();
+    assert_eq!(
+        json["current"]["robots_denied"].as_array().unwrap().len(),
+        2
     );
 }
 
@@ -1473,8 +1557,8 @@ async fn check_of_a_preview_trusts_production_only_when_told() {
         preview.url("/"),
         &settings(),
         CrawlExtras {
-            seeds: Vec::new(),
             production: vec![production.url("/")],
+            ..CrawlExtras::default()
         },
         &mut Progress::quiet(),
         "test",

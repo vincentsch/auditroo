@@ -235,6 +235,46 @@ pub fn headline(report: &Report) -> String {
     }
 }
 
+/// A sentence for the top of the output when some URLs were not checked, so
+/// that a pass is not read as "the whole site is fine". The notes say more.
+pub fn incomplete_line(report: &Report) -> Option<String> {
+    if !report.incomplete() {
+        return None;
+    }
+    let denied = report.current.robots_denied.len();
+    let (reason, more) = if denied > 0 {
+        (
+            format!(
+                "robots.txt blocks auditroo from {} URL{}",
+                format_count(denied),
+                if denied == 1 { "" } else { "s" }
+            ),
+            if denied == 1 {
+                "say which"
+            } else {
+                "list them"
+            },
+        )
+    } else if report.current.truncated {
+        (
+            "the crawl stopped at --max-pages or --max-depth".to_owned(),
+            "say more",
+        )
+    } else {
+        (
+            format!(
+                "{} page{} of the baseline could not be compared",
+                format_count(report.not_compared),
+                if report.not_compared == 1 { "" } else { "s" }
+            ),
+            "say why",
+        )
+    };
+    Some(format!(
+        "This result is incomplete, because {reason}. The notes at the end {more}."
+    ))
+}
+
 /// A comma list of URLs, cut after `limit` with "and N more".
 pub fn url_list(urls: &[String], total: usize, limit: usize, site: &Site) -> String {
     let shown: Vec<String> = urls

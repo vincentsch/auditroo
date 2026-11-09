@@ -94,6 +94,11 @@ pub struct CrawlSummary {
     pub failed: usize,
     /// The crawl stopped at --max-pages or --max-depth.
     pub truncated: bool,
+    /// URLs that robots.txt blocks for auditroo, so the crawl did not fetch
+    /// them. In compare and diff the current crawl still fetches pages that
+    /// the earlier robots.txt allowed, unless a new rule names auditroo.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub robots_denied: Vec<String>,
 }
 
 impl CrawlSummary {
@@ -108,6 +113,7 @@ impl CrawlSummary {
             urls: snapshot.records.len(),
             failed: snapshot.crawl_failures.len(),
             truncated: snapshot.truncated(),
+            robots_denied: snapshot.robots_denied().map(str::to_owned).collect(),
         }
     }
 }
@@ -277,6 +283,12 @@ impl Report {
         self.findings
             .iter()
             .filter(move |finding| self.fails_gate(finding))
+    }
+
+    /// Whether some URLs were not checked, so a pass does not mean the
+    /// whole site is fine.
+    pub fn incomplete(&self) -> bool {
+        !self.current.robots_denied.is_empty() || self.current.truncated || self.not_compared > 0
     }
 
     pub fn exit_code(&self) -> i32 {

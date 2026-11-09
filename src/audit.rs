@@ -15,19 +15,21 @@ use crate::assertions::{
     evaluate_assertions, extract_custom_values, AssertionFinding, CustomExtraction,
 };
 use crate::config::{canonical_observation_patterns, ResolvedSettings};
+use crate::crawl::robots::origin_key;
 use crate::crawl::{
     normalize_url, CrawlDriver, CrawlDriverConfig, CrawlEvent, CrawlScope, CrawlSeed,
     CrawlSeedSource, CrawlSkippedReason, CrawlTraversalTruncationReason, FetchError, Fetcher,
-    HttpFetcher, HttpFetcherConfig, RobotsPolicy, ScopePattern,
+    HttpFetcher, HttpFetcherConfig, RobotsFile, RobotsPolicy, ScopePattern,
 };
 #[cfg(feature = "browser")]
 use crate::crawl::{BrowserFetcher, BrowserFetcherConfig, BrowserSession};
 use crate::error::CliError;
 use crate::external::apply_impact;
 use crate::extract::extract;
-use crate::findings::{Finding, Rule, Severity};
+use crate::findings::{format_count, Finding, Rule, Severity};
 use crate::graph::LinkGraphAccumulator;
 use crate::progress::Progress;
+use crate::render::url_list;
 use crate::report::{Report, ReportCommand, ReportInput};
 use crate::rules::{check::check, diff::diff, start_issue};
 use crate::sitemap::{
@@ -47,18 +49,31 @@ pub struct CrawlExtras {
     /// a local build. URLs on those hosts, for example in canonical tags,
     /// are read on the crawled host instead.
     pub production: Vec<Url>,
+    /// robots.txt files of the crawl this one is compared with, keyed by
+    /// this crawl's origins. Pages they let auditroo fetch are crawled even
+    /// when the new robots.txt blocks them, so the block cannot hide what
+    /// is behind it.
+    pub earlier_robots: BTreeMap<String, RobotsFile>,
 }
 
 impl CrawlExtras {
-    /// Seeds and production mapping for a crawl that is compared with
-    /// `baseline`: the baseline's host, and the hosts it stood in for.
+    /// Seeds, production mapping and robots.txt rules for a crawl that is
+    /// compared with `baseline`: the baseline's host, and the hosts it stood
+    /// in for.
     pub fn compared_with(baseline: &Snapshot, current_start: &Url) -> Self {
+        // Same-host origins keep their own file. A preview on another host
+        // gets the rules of the baseline's start page.
+        let mut earlier_robots = baseline.robots.clone();
+        if let Some(file) = baseline.start_robots() {
+            earlier_robots.insert(origin_key(current_start), file.clone());
+        }
         Self {
             seeds: baseline_seeds(baseline, current_start),
             production: std::iter::once(&baseline.start_url)
                 .chain(&baseline.production_urls)
                 .filter_map(|url| Url::parse(url).ok())
                 .collect(),
+            earlier_robots,
         }
     }
 }
@@ -111,7 +126,9 @@ pub async fn crawl(
     progress.start(label, start_url.as_ref());
     let robots_fetcher: Arc<dyn Fetcher> = http_fetcher.clone();
     let robots = Arc::new(
-        RobotsPolicy::load(&start_url, robots_fetcher, settings.crawl.respect_robots).await,
+        RobotsPolicy::load(&start_url, robots_fetcher, settings.crawl.respect_robots)
+            .await
+            .allowing_earlier(&extras.earlier_robots),
     );
     let sitemap_roots = if settings.crawl.sitemaps.is_empty() {
         robots.sitemap_urls()
@@ -407,6 +424,10 @@ pub fn foreign_canonical_note(origin: &str) -> String {
     )
 }
 
+/// URLs that the robots.txt note lists before "and N more". The JSON report
+/// has all of them.
+const DENIED_URLS_IN_NOTE: usize = 10;
+
 /// Notes about one crawl that a reader should know.
 pub fn crawl_notes(snapshot: &Snapshot) -> Vec<String> {
     let mut notes = Vec::new();
@@ -461,19 +482,21 @@ pub fn crawl_notes(snapshot: &Snapshot) -> Vec<String> {
             snapshot.crawl_observation.max_pages
         ));
     }
-    let denied = snapshot
-        .crawl_observation
-        .skipped_candidates
-        .iter()
-        .filter(|(url, reasons)| {
-            *url != &snapshot.start_url && reasons.contains(&CrawlSkipReason::RobotsDenied)
-        })
-        .count();
-    if denied > 0 {
+    // The start page has its own note, from the comparison or the error.
+    let denied: Vec<String> = snapshot
+        .robots_denied()
+        .filter(|url| *url != snapshot.start_url)
+        .map(str::to_owned)
+        .collect();
+    if !denied.is_empty() {
+        let one = denied.len() == 1;
         notes.push(format!(
-            "robots.txt blocked auditroo from {denied} URL{}. Use --ignore-robots to also check {}.",
-            if denied == 1 { "" } else { "s" },
-            if denied == 1 { "it" } else { "them" }
+            "robots.txt blocks auditroo from {} URL{}, so {} not checked: {}. Add --ignore-robots to check {} on your own site.",
+            format_count(denied.len()),
+            if one { "" } else { "s" },
+            if one { "it was" } else { "they were" },
+            url_list(&denied, denied.len(), DENIED_URLS_IN_NOTE, &site),
+            if one { "it" } else { "them" }
         ));
     }
     notes
@@ -481,7 +504,7 @@ pub fn crawl_notes(snapshot: &Snapshot) -> Vec<String> {
 
 fn origin_of(url: &str) -> String {
     Url::parse(url)
-        .map(|url| crate::crawl::robots::origin_key(&url))
+        .map(|url| origin_key(&url))
         .unwrap_or_else(|_| url.to_owned())
 }
 

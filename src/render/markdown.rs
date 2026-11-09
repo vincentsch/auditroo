@@ -1,7 +1,7 @@
 //! Markdown for GitHub job summaries and pull request comments.
 
 use super::human::{detail_lines, example_lines, sentence};
-use super::{groups, headline, scope_sentence, site_for, Group};
+use super::{groups, headline, incomplete_line, scope_sentence, site_for, Group};
 use crate::findings::Severity;
 use crate::report::Report;
 
@@ -25,6 +25,9 @@ pub fn render(report: &Report) -> String {
             scope_sentence(report),
             report.fail_on
         ));
+    }
+    if let Some(line) = incomplete_line(report) {
+        out.push_str(&format!("> [!WARNING]\n> {}\n\n", escape_inline(&line)));
     }
 
     let failing_groups: Vec<&Group<'_>> = groups.iter().filter(|group| group.fails).collect();
@@ -115,8 +118,14 @@ fn where_cell(group: &Group<'_>, site: &crate::site::Site) -> String {
         .filter_map(|finding| finding.url.clone())
         .collect();
     let mut total = urls.len();
-    if urls.is_empty() {
-        if let Some(finding) = group.findings.first() {
+    // A site-wide finding is about its related pages, such as the pages a
+    // robots.txt rule blocks, more than about robots.txt itself.
+    if urls.is_empty() || group.rule.is_site_wide() {
+        if let Some(finding) = group
+            .findings
+            .first()
+            .filter(|finding| !finding.related.is_empty())
+        {
             urls = finding.related.clone();
             total = finding.related_total;
         }

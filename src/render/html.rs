@@ -6,7 +6,8 @@ use std::sync::OnceLock;
 use regex::Regex;
 
 use super::{
-    format_time, groups, headline, impact_line, scope_sentence, site_for, summary_lines, Group,
+    format_time, groups, headline, impact_line, incomplete_line, scope_sentence, site_for,
+    summary_lines, Group,
 };
 use crate::analysis::LogAnalysisReport;
 use crate::findings::{format_count, Finding, Severity};
@@ -45,6 +46,9 @@ pub fn render_with_logs(report: &Report, logs: Option<&LogAnalysisReport>) -> St
         format_count(report.current.pages),
         escape(&format_time(report.created_at)),
     ));
+    if let Some(line) = incomplete_line(report) {
+        html.push_str(&format!("<p class=\"incomplete\">{}</p>\n", prose(&line)));
+    }
 
     html.push_str("<section class=\"tiles\" aria-label=\"Findings by severity\">\n");
     for severity in Severity::ALL_DESCENDING {
@@ -397,6 +401,7 @@ summary { cursor: pointer; color: var(--muted); font-size: 14px; }
 .urls li { break-inside: avoid; overflow-wrap: anywhere; }
 .urls .more { list-style: none; color: var(--muted); }
 .rule-id { margin: 10px 0 0; font-size: 12px; color: var(--muted); }
+.incomplete { margin: 14px 0 0; padding: 10px 14px; border: 1px solid var(--line); border-left: 4px solid var(--medium); border-radius: 10px; background: var(--card); }
 .empty { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px 22px; margin-top: 20px; }
 .logs pre { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; overflow-x: auto; font-size: 13px; }
 footer { margin-top: 40px; color: var(--muted); font-size: 13px; }

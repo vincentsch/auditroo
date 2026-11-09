@@ -126,6 +126,10 @@ the preview still uses production URLs, for example in canonical tags,
 auditroo reads them on the preview under the same path. URLs on any other
 host are reported.
 
+When the preview's robots.txt blocks pages that production's robots.txt
+allows, auditroo reports the block and still checks those pages on the
+preview. You do not need --ignore-robots for that.
+
 Examples:
   auditroo compare https://example.com https://my-branch.example.vercel.app
   auditroo compare https://example.com http://localhost:4321
@@ -356,8 +360,11 @@ struct CrawlArgs {
     /// goes to the start URL's host. Repeat for more.
     #[arg(long, value_name = "NAME: VALUE")]
     header: Vec<String>,
-    /// Crawl pages that robots.txt blocks for auditroo, for example on your
-    /// own staging site. robots.txt is still checked for Googlebot.
+    /// Crawl pages that robots.txt blocks for auditroo. Use it only on your
+    /// own sites. In compare it applies to production too. A preview does
+    /// not need it when only its new robots.txt blocks a page, because
+    /// compare and diff crawl every page that production or the baseline
+    /// allowed. robots.txt is still checked for Googlebot.
     #[arg(long)]
     ignore_robots: bool,
     /// Render pages in headless Chrome before reading them. Needs a build

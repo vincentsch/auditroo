@@ -60,8 +60,11 @@ fn demo_shows_a_failing_comparison_without_network() {
             "what to do: Remove the noindex from the robots meta tag",
         ))
         .stdout(predicate::str::contains("      rule: noindex_added\n"))
-        // Findings below the fail-on level get no advice line.
-        .stdout(predicate::str::contains("rule: title_changed").not())
+        // Findings below the fail-on level name their rule too, so an
+        // ignore rule needs no JSON report.
+        .stdout(predicate::str::contains(
+            "          after:  \"Contact us | Harbor Coffee Roasters\"\n          rule: title_changed\n",
+        ))
         .stdout(predicate::str::contains("exit with code 1"));
 
     let output = auditroo(&dir)
@@ -74,6 +77,17 @@ fn demo_shows_a_failing_comparison_without_network() {
     let report: Value = serde_json::from_slice(&output).unwrap();
     assert_eq!(report["artifact_kind"], "report");
     assert_eq!(report["passed"], false);
+    // The robots.txt finding names the file, like other findings name a page.
+    let robots = report["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|finding| finding["rule"] == "robots_blocked")
+        .expect("a robots_blocked finding");
+    assert!(
+        robots["url"].as_str().unwrap().ends_with("/robots.txt"),
+        "{robots}"
+    );
     let html = std::fs::read_to_string(dir.path().join("demo.html")).unwrap();
     assert!(html.contains("<html"));
     // Narrow screens must not break the line inside a flag.
@@ -89,6 +103,10 @@ fn demo_shows_a_failing_comparison_without_network() {
         .stdout(predicate::str::contains("| What to do | Rule |"))
         .stdout(predicate::str::contains(
             "| Fix the JSON syntax. | `rule: structured_data_invalid` |",
+        ))
+        // The blocked pages say more than robots.txt itself.
+        .stdout(predicate::str::contains(
+            "from 1 page | `/brewing-guide/` |",
         ));
 }
 

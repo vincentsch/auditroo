@@ -369,7 +369,9 @@ pub fn gate_decision(effective: Option<Severity>, threshold: Severity) -> GateDe
 pub struct Finding {
     pub rule: Rule,
     pub severity: Severity,
-    /// The page or file this is about. Missing for site-wide findings.
+    /// The page or file this is about, such as robots.txt for
+    /// `robots_blocked`. Missing for `sitemap_urls_removed` and
+    /// `sitemap_missing`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
     /// One plain sentence, without the URL.

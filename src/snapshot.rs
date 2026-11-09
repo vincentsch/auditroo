@@ -368,6 +368,15 @@ impl Snapshot {
             .is_some_and(|reasons| reasons.contains(&CrawlSkipReason::RobotsDenied))
     }
 
+    /// URLs that robots.txt kept auditroo from, sorted.
+    pub fn robots_denied(&self) -> impl Iterator<Item = &str> {
+        self.crawl_observation
+            .skipped_candidates
+            .iter()
+            .filter(|(_, reasons)| reasons.contains(&CrawlSkipReason::RobotsDenied))
+            .map(|(url, _)| url.as_str())
+    }
+
     /// The crawl stopped early because of --max-pages or --max-depth.
     pub fn truncated(&self) -> bool {
         !self.crawl_observation.global_truncation_reasons.is_empty()

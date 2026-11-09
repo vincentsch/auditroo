@@ -42,7 +42,7 @@ auditroo check [OPTIONS] <URL>
 | `--exclude <PATTERN>` | Do not crawl paths that match, for example `/search?*`. Repeat for more. |
 | `--user-agent <TEXT>` | User-Agent header [default: auditroo/&lt;version&gt; (+https://github.com/vincentsch/auditroo)] |
 | `--header <NAME: VALUE>` | Send this header to the site, for example a firewall or preview bypass token. auditroo fills in ${NAME} from the environment. The header only goes to the start URL's host. Repeat for more. |
-| `--ignore-robots` | Crawl pages that robots.txt blocks for auditroo, for example on your own staging site. robots.txt is still checked for Googlebot. |
+| `--ignore-robots` | Crawl pages that robots.txt blocks for auditroo. Use it only on your own sites. In compare it applies to production too. A preview does not need it when only its new robots.txt blocks a page, because compare and diff crawl every page that production or the baseline allowed. robots.txt is still checked for Googlebot. |
 | `--render-js` | Render pages in headless Chrome before reading them. Needs a build with the browser feature. |
 | `--sitemap <URL>` | Read this sitemap instead of the ones robots.txt names. Repeat for more. |
 | `--production-url <URL>` | The live site, when the crawled URL is a preview or a local build of it. Production URLs, for example in canonical tags, then count as the build's own and are read on the build under the same path. Overrides [crawl] production_url. |
@@ -93,7 +93,7 @@ auditroo compare [OPTIONS] <PRODUCTION_URL> <PREVIEW_URL>
 | `--exclude <PATTERN>` | Do not crawl paths that match, for example `/search?*`. Repeat for more. |
 | `--user-agent <TEXT>` | User-Agent header [default: auditroo/&lt;version&gt; (+https://github.com/vincentsch/auditroo)] |
 | `--header <NAME: VALUE>` | Send this header to the site, for example a firewall or preview bypass token. auditroo fills in ${NAME} from the environment. The header only goes to the start URL's host. Repeat for more. |
-| `--ignore-robots` | Crawl pages that robots.txt blocks for auditroo, for example on your own staging site. robots.txt is still checked for Googlebot. |
+| `--ignore-robots` | Crawl pages that robots.txt blocks for auditroo. Use it only on your own sites. In compare it applies to production too. A preview does not need it when only its new robots.txt blocks a page, because compare and diff crawl every page that production or the baseline allowed. robots.txt is still checked for Googlebot. |
 | `--render-js` | Render pages in headless Chrome before reading them. Needs a build with the browser feature. |
 | `--sitemap <URL>` | Read this sitemap instead of the ones robots.txt names. Repeat for more. |
 | `--production-url <URL>` | The live site, when the crawled URL is a preview or a local build of it. Production URLs, for example in canonical tags, then count as the build's own and are read on the build under the same path. Overrides [crawl] production_url. |
@@ -105,6 +105,10 @@ the preview, so removed pages show up even when nothing links to them. When
 the preview still uses production URLs, for example in canonical tags,
 auditroo reads them on the preview under the same path. URLs on any other
 host are reported.
+
+When the preview's robots.txt blocks pages that production's robots.txt
+allows, auditroo reports the block and still checks those pages on the
+preview. You do not need --ignore-robots for that.
 
 Examples:
   auditroo compare https://example.com https://my-branch.example.vercel.app
@@ -151,7 +155,7 @@ auditroo diff [OPTIONS] --baseline <FILE> <URL>
 | `--exclude <PATTERN>` | Do not crawl paths that match, for example `/search?*`. Repeat for more. |
 | `--user-agent <TEXT>` | User-Agent header [default: auditroo/&lt;version&gt; (+https://github.com/vincentsch/auditroo)] |
 | `--header <NAME: VALUE>` | Send this header to the site, for example a firewall or preview bypass token. auditroo fills in ${NAME} from the environment. The header only goes to the start URL's host. Repeat for more. |
-| `--ignore-robots` | Crawl pages that robots.txt blocks for auditroo, for example on your own staging site. robots.txt is still checked for Googlebot. |
+| `--ignore-robots` | Crawl pages that robots.txt blocks for auditroo. Use it only on your own sites. In compare it applies to production too. A preview does not need it when only its new robots.txt blocks a page, because compare and diff crawl every page that production or the baseline allowed. robots.txt is still checked for Googlebot. |
 | `--render-js` | Render pages in headless Chrome before reading them. Needs a build with the browser feature. |
 | `--sitemap <URL>` | Read this sitemap instead of the ones robots.txt names. Repeat for more. |
 | `--production-url <URL>` | The live site, when the crawled URL is a preview or a local build of it. Production URLs, for example in canonical tags, then count as the build's own and are read on the build under the same path. Overrides [crawl] production_url. |
@@ -191,7 +195,7 @@ auditroo snapshot [OPTIONS] --out <FILE> <URL>
 | `--exclude <PATTERN>` | Do not crawl paths that match, for example `/search?*`. Repeat for more. |
 | `--user-agent <TEXT>` | User-Agent header [default: auditroo/&lt;version&gt; (+https://github.com/vincentsch/auditroo)] |
 | `--header <NAME: VALUE>` | Send this header to the site, for example a firewall or preview bypass token. auditroo fills in ${NAME} from the environment. The header only goes to the start URL's host. Repeat for more. |
-| `--ignore-robots` | Crawl pages that robots.txt blocks for auditroo, for example on your own staging site. robots.txt is still checked for Googlebot. |
+| `--ignore-robots` | Crawl pages that robots.txt blocks for auditroo. Use it only on your own sites. In compare it applies to production too. A preview does not need it when only its new robots.txt blocks a page, because compare and diff crawl every page that production or the baseline allowed. robots.txt is still checked for Googlebot. |
 | `--render-js` | Render pages in headless Chrome before reading them. Needs a build with the browser feature. |
 | `--sitemap <URL>` | Read this sitemap instead of the ones robots.txt names. Repeat for more. |
 | `--production-url <URL>` | The live site, when the crawled URL is a preview or a local build of it. Production URLs, for example in canonical tags, then count as the build's own and are read on the build under the same path. Overrides [crawl] production_url. |

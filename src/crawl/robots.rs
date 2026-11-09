@@ -6,6 +6,11 @@
 //! checks later test each page against its own origin's file for Googlebot,
 //! Bingbot and the AI crawlers.
 //!
+//! When a crawl is compared with an earlier one, pages that the earlier
+//! robots.txt allowed are crawled even when the new file blocks them. A new
+//! `Disallow` rule is the change under test, so it must not hide the pages
+//! it blocks. A new group for auditroo itself is always followed.
+//!
 //! `User-agent` lines are read like Google's parser reads them: only the
 //! leading `[A-Za-z_-]` characters count, so `Googlebot/2.1` and
 //! `Googlebot*` both name Googlebot.
@@ -94,8 +99,34 @@ enum RobotsDecision {
     Rules(Box<Robot>),
 }
 
+impl RobotsDecision {
+    /// What a robots.txt file lets auditroo fetch. A missing or failing file
+    /// allows everything: auditroo crawls anyway and reports the failure as
+    /// a finding, so the rest of the site is still checked.
+    fn for_auditroo(file: &RobotsFile) -> Self {
+        match (file.status, &file.body) {
+            (Some(200), Some(body)) => {
+                match Robot::new("auditroo", google_user_agents(body).as_bytes()) {
+                    Ok(robot) => Self::Rules(Box::new(robot)),
+                    Err(_) => Self::AllowAll,
+                }
+            }
+            _ => Self::AllowAll,
+        }
+    }
+
+    fn allows(&self, url: &Url) -> bool {
+        match self {
+            Self::AllowAll => true,
+            Self::Rules(robot) => robot.allowed(&path_and_query(url)),
+        }
+    }
+}
+
 struct OriginRobots {
     decision: RobotsDecision,
+    /// The file has a group for auditroo itself.
+    names_auditroo: bool,
     file: RobotsFile,
     sitemaps: Vec<String>,
 }
@@ -107,6 +138,9 @@ pub struct RobotsPolicy {
     respect_robots: bool,
     start_origin: String,
     cache: Arc<Mutex<HashMap<String, Arc<OnceCell<OriginRobots>>>>>,
+    /// The rules of the crawl this one is compared with, keyed by this
+    /// crawl's origins.
+    earlier: Arc<HashMap<String, RobotsDecision>>,
 }
 
 impl fmt::Debug for RobotsPolicy {
@@ -121,6 +155,7 @@ impl fmt::Debug for RobotsPolicy {
             .field("respect_robots", &self.respect_robots)
             .field("start_origin", &self.start_origin)
             .field("loaded_origins", &cache_len)
+            .field("earlier_origins", &self.earlier.len())
             .finish_non_exhaustive()
     }
 }
@@ -132,6 +167,7 @@ impl Clone for RobotsPolicy {
             respect_robots: self.respect_robots,
             start_origin: self.start_origin.clone(),
             cache: Arc::clone(&self.cache),
+            earlier: Arc::clone(&self.earlier),
         }
     }
 }
@@ -150,6 +186,7 @@ impl RobotsPolicy {
             respect_robots,
             start_origin: start_origin.clone(),
             cache: Arc::new(Mutex::new(HashMap::new())),
+            earlier: Arc::new(HashMap::new()),
         };
 
         let cell = policy.cell_for(&start_origin);
@@ -158,21 +195,38 @@ impl RobotsPolicy {
         policy
     }
 
+    /// Also allow what these robots.txt files allowed auditroo to fetch.
+    /// They come from the crawl this one is compared with, keyed by this
+    /// crawl's origins, such as production's file under the preview origin.
+    pub fn allowing_earlier(mut self, files: &BTreeMap<String, RobotsFile>) -> Self {
+        self.earlier = Arc::new(
+            files
+                .iter()
+                .map(|(origin, file)| (origin.clone(), RobotsDecision::for_auditroo(file)))
+                .collect(),
+        );
+        self
+    }
+
     /// Whether auditroo may fetch `url`. The origin's robots.txt is loaded
     /// on first use, also when the crawl ignores robots.txt, because the
     /// Googlebot checks need every file in the snapshot.
     pub async fn allows(&self, url: &Url) -> bool {
         let origin = origin_key(url);
         let cell = self.cell_for(&origin);
-        let state = cell.get_or_init(|| self.fetch_origin(origin)).await;
+        let state = cell.get_or_init(|| self.fetch_origin(origin.clone())).await;
         if !self.respect_robots {
             return true;
         }
 
-        match &state.decision {
-            RobotsDecision::AllowAll => true,
-            RobotsDecision::Rules(robot) => robot.allowed(&path_and_query(url)),
-        }
+        // A group for auditroo itself is the site owner asking auditroo to
+        // stay away, so the earlier file does not count then.
+        state.decision.allows(url)
+            || (!state.names_auditroo
+                && self
+                    .earlier
+                    .get(&origin)
+                    .is_some_and(|decision| decision.allows(url)))
     }
 
     /// `Sitemap:` lines from every robots.txt file loaded so far.
@@ -243,14 +297,16 @@ fn map_response(robots_url: &Url, response: FetchedResponse) -> OriginRobots {
         // A 4xx (missing) file allows everything. Google treats 5xx and 429
         // as a full block. auditroo crawls anyway and reports the block as a
         // finding, so the rest of the site is still checked.
+        let file = RobotsFile {
+            url: robots_url.to_string(),
+            status: Some(status),
+            body: None,
+            error: None,
+        };
         return OriginRobots {
-            decision: RobotsDecision::AllowAll,
-            file: RobotsFile {
-                url: robots_url.to_string(),
-                status: Some(status),
-                body: None,
-                error: None,
-            },
+            decision: RobotsDecision::for_auditroo(&file),
+            names_auditroo: false,
+            file,
             sitemaps: Vec::new(),
         };
     }
@@ -264,31 +320,35 @@ fn map_response(robots_url: &Url, response: FetchedResponse) -> OriginRobots {
         body.truncate(cut);
     }
     let sitemaps = parse_sitemaps(&body, robots_url);
-    let decision = match Robot::new("auditroo", google_user_agents(&body).as_bytes()) {
-        Ok(robot) => RobotsDecision::Rules(Box::new(robot)),
-        Err(_) => RobotsDecision::AllowAll,
+    let names_auditroo = google_user_agents(&body).lines().any(|line| {
+        line.strip_prefix("User-agent: ")
+            .is_some_and(|agent| agent.eq_ignore_ascii_case("auditroo"))
+    });
+    let file = RobotsFile {
+        url: robots_url.to_string(),
+        status: Some(200),
+        body: Some(body),
+        error: None,
     };
     OriginRobots {
-        decision,
-        file: RobotsFile {
-            url: robots_url.to_string(),
-            status: Some(200),
-            body: Some(body),
-            error: None,
-        },
+        decision: RobotsDecision::for_auditroo(&file),
+        names_auditroo,
+        file,
         sitemaps,
     }
 }
 
 fn failed(url: &str, error: String) -> OriginRobots {
+    let file = RobotsFile {
+        url: url.to_owned(),
+        status: None,
+        body: None,
+        error: Some(error),
+    };
     OriginRobots {
-        decision: RobotsDecision::AllowAll,
-        file: RobotsFile {
-            url: url.to_owned(),
-            status: None,
-            body: None,
-            error: Some(error),
-        },
+        decision: RobotsDecision::for_auditroo(&file),
+        names_auditroo: false,
+        file,
         sitemaps: Vec::new(),
     }
 }
@@ -458,6 +518,61 @@ mod tests {
 
         assert!(!policy.allows(&url("https://example.test/private")).await);
         assert!(policy.allows(&url("https://example.test/public")).await);
+    }
+
+    #[tokio::test]
+    async fn pages_the_earlier_robots_txt_allowed_are_still_crawled() {
+        let fetcher = Arc::new(FakeFetcher::default());
+        fetcher.with_response(
+            &robots_url("https://preview.test"),
+            response(
+                &robots_url("https://preview.test"),
+                200,
+                "User-agent: *\nDisallow: /docs/\nDisallow: /admin/\n",
+            ),
+        );
+        let production = RobotsFile {
+            url: robots_url("https://www.example.test"),
+            status: Some(200),
+            body: Some("User-agent: *\nDisallow: /admin/\n".to_owned()),
+            error: None,
+        };
+        let earlier = BTreeMap::from([("https://preview.test".to_owned(), production)]);
+
+        let preview = policy("https://preview.test/", Arc::clone(&fetcher), true)
+            .await
+            .allowing_earlier(&earlier);
+
+        // Only the new file blocks /docs/, so auditroo still checks it.
+        assert!(
+            preview
+                .allows(&url("https://preview.test/docs/setup/"))
+                .await
+        );
+        // Both files block /admin/.
+        assert!(!preview.allows(&url("https://preview.test/admin/")).await);
+        // A group for auditroo itself is followed.
+        fetcher.with_response(
+            &robots_url("https://other.test"),
+            response(
+                &robots_url("https://other.test"),
+                200,
+                "User-agent: AuditRoo/0.1\nDisallow: /docs/\n",
+            ),
+        );
+        let named = policy("https://other.test/", Arc::clone(&fetcher), true)
+            .await
+            .allowing_earlier(&BTreeMap::from([(
+                "https://other.test".to_owned(),
+                earlier["https://preview.test"].clone(),
+            )]));
+        assert!(!named.allows(&url("https://other.test/docs/setup/")).await);
+        // The preview's file itself is unchanged and still goes into the
+        // snapshot.
+        assert_eq!(
+            preview.start_file().body.as_deref(),
+            Some("User-agent: *\nDisallow: /docs/\nDisallow: /admin/\n")
+        );
     }
 
     #[tokio::test]

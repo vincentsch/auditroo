@@ -635,11 +635,16 @@ fn robots_changes(
             .map(|crawler| crawler.severity)
             .max()
             .unwrap_or(Severity::Medium);
+        // The finding names the file that blocks the pages. `blocked` only
+        // has pages whose robots.txt the crawl loaded.
+        let file = current
+            .robots_file(&blocked[0])
+            .map(|file| file.url.clone());
         let mut finding = Finding::new(
             Rule::RobotsBlocked,
-            None,
+            file.as_deref(),
             format!(
-                "robots.txt now blocks {who} from {} page{} that {} could crawl before",
+                "now blocks {who} from {} page{} that {} could crawl before",
                 format_count(total),
                 if total == 1 { "" } else { "s" },
                 if crawlers.len() == 1 { "it" } else { "they" }
