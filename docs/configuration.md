@@ -112,7 +112,8 @@ The first rule changes nothing with the default settings. `title_changed`
 is a medium finding, and a run fails only on high and critical findings
 unless you change `fail_on`. Its ignore rule starts to matter with
 `fail_on = "medium"` or lower. Run `auditroo explain title_changed` to see
-the severity of a rule and what it checks.
+the severity of a rule and what it checks. It also prints an ignore rule
+for it that you can paste.
 
 On the command line, write the rule as a TOML table:
 

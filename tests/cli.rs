@@ -133,8 +133,22 @@ fn explain_prints_the_findings_docs_for_a_rule() {
             .stdout(predicate::str::contains(
                 "A run fails on high and critical findings, unless you change --fail-on.",
             ))
-            .stdout(predicate::str::contains("findings.md#title_changed"));
+            .stdout(predicate::str::contains("findings.md#title_changed"))
+            // The next thing you need is the ignore rule, ready to paste.
+            .stdout(predicate::str::contains(
+                "under [gate] in auditroo.toml:\n\n    { rule = \"title_changed\", url = \"/docs/\" },\n",
+            ))
+            .stdout(predicate::str::contains(
+                "    --ignore '{ rule = \"title_changed\", url = \"/docs/\" }'\n",
+            ));
     }
+    auditroo(&dir)
+        .args(["explain", "sitemap_urls_removed"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "    { rule = \"sitemap_urls_removed\" },\n",
+        ));
     auditroo(&dir)
         .arg("explain")
         .assert()

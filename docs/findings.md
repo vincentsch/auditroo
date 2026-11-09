@@ -9,7 +9,7 @@ shows the rule id under each finding (`rule: noindex_added`). For each
 finding that fails the run, the text output and the job summary also show
 the first sentence of the advice. The HTML report shows the full advice
 next to each finding. `auditroo explain noindex_added` prints the section
-of this page for one rule in your terminal.
+of this page for one rule in your terminal, with an ignore rule for it.
 
 ## What the SEO terms mean
 

@@ -168,7 +168,8 @@ Tell the user two things about the new rule:
   merged. Until then the pull request check still sees the finding.
 - A medium or low finding, such as `title_changed`, does not fail a run
   with the default `--fail-on high`. The rule then only marks the finding
-  as expected. `auditroo explain <rule>` shows a rule's severity.
+  as expected. `auditroo explain <rule>` shows a rule's severity and an
+  ignore rule for it.
 
 The text output lists ignored findings under "Ignored", so you can check
 that the rule matched.

@@ -21,7 +21,8 @@ The first public release. It contains:
   no network access.
 - `auditroo report` prints a saved report again in any output format.
 - `auditroo explain <rule>` prints what a rule checks and what to do about
-  it, from the same text as `docs/findings.md`.
+  it, from the same text as `docs/findings.md`. It ends with an ignore rule
+  for it that you can paste.
 
 ### Findings
 

@@ -183,8 +183,9 @@ Examples:
   auditroo demo --html demo-report.html";
 
 const EXPLAIN_HELP: &str = "\
-The text is the rule's section of docs/findings.md. Without a rule, explain
-lists every rule id.
+The text is the rule's section of docs/findings.md. It ends with an ignore
+rule for auditroo.toml that you can paste. Without a rule, explain lists
+every rule id.
 
 Examples:
   auditroo explain title_changed

@@ -37,9 +37,39 @@ pub fn explain(name: &str) -> Result<String, CliError> {
     })?;
     let section = section(rule).unwrap_or_default();
     let mut out = format!("{}\n\n{}\n\n", rule.id(), plain(&section));
+    out.push_str(&ignore_rule(rule));
     out.push_str("A run fails on high and critical findings, unless you change --fail-on.\n");
     out.push_str(&format!("More: {DOCS_URL}#{}\n", rule.id()));
     Ok(out)
+}
+
+/// A ready ignore rule for the rule, because that is what you need next
+/// when a finding is expected.
+fn ignore_rule(rule: Rule) -> String {
+    let id = rule.id();
+    let (table, help) = match rule {
+        Rule::Assertion | Rule::QualityBudget => (
+            "{ assertion = \"your-check-id\" }".to_owned(),
+            "Use the id that the output shows after \"assertion:\". To try the\nrule first, pass it on the command line:",
+        ),
+        // These findings are about the whole site or its robots.txt, so a
+        // page URL would not match them.
+        Rule::SitemapMissing
+        | Rule::SitemapUrlsRemoved
+        | Rule::RobotsBlocked
+        | Rule::RobotsError
+        | Rule::RobotsBlocksSite => (
+            format!("{{ rule = \"{id}\" }}"),
+            "To try the rule first, pass it on the command line:",
+        ),
+        _ => (
+            format!("{{ rule = \"{id}\", url = \"/docs/\" }}"),
+            "Set url to the path that the output shows. \"/docs/\" matches only that\npage, and \"/docs/*\" every page under it. Without url, the rule covers\nevery page. To try the rule first, pass it on the command line:",
+        ),
+    };
+    format!(
+        "To accept these findings on purpose, add this line to the ignore list\nunder [gate] in auditroo.toml:\n\n    {table},\n\n{help}\n\n    --ignore '{table}'\n\n"
+    )
 }
 
 /// The text for `auditroo explain` without a rule: every rule id, under
@@ -107,6 +137,27 @@ mod tests {
         for rule in Rule::ALL {
             let text = section(*rule).unwrap_or_default();
             assert!(text.contains("What to do"), "{}: {text:?}", rule.id());
+        }
+    }
+
+    #[test]
+    fn every_rule_prints_an_ignore_rule_that_works() {
+        for rule in Rule::ALL {
+            let text = ignore_rule(*rule);
+            let table = text
+                .lines()
+                .find_map(|line| line.trim().strip_prefix("--ignore '"))
+                .and_then(|rest| rest.strip_suffix('\''))
+                .unwrap_or_else(|| panic!("{}: {text}", rule.id()));
+            assert!(text.contains(&format!("    {table},\n")), "{text}");
+            let parsed = crate::config::parse_cli_ignore_rule(table)
+                .unwrap_or_else(|error| panic!("{table}: {error}"));
+            match rule {
+                Rule::Assertion | Rule::QualityBudget => {
+                    assert_eq!(parsed.assertion.as_deref(), Some("your-check-id"))
+                }
+                _ => assert_eq!(parsed.rule.as_deref(), Some(rule.id())),
+            }
         }
     }
 
