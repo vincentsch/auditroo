@@ -74,12 +74,17 @@ For Vercel Deployment Protection, see [CI recipes](ci.md#previews-behind-vercel-
 ## Staging sites that block all crawlers
 
 A staging site often serves a robots.txt with `Disallow: /`, so that search
-engines stay away. auditroo then stops at the start page, because auditroo
-also follows robots.txt. Use `--ignore-robots` to crawl your own staging
-site anyway. auditroo still reads robots.txt and checks it for Googlebot.
+engines stay away. A `check` or `snapshot` of that site stops at the start
+page, because auditroo also follows robots.txt. Use `--ignore-robots` to
+crawl your own staging site anyway. auditroo still reads robots.txt and
+checks it for Googlebot.
 
-In a `compare`, auditroo reports a robots.txt like that as
-`robots_blocked`, because the same file in production would block Google.
+`compare` and `diff` do not need the flag for this. They crawl every page
+that production's robots.txt, or the baseline's, let auditroo fetch. In
+`compare` the flag would also apply to production.
+
+`compare` reports a robots.txt like that as `robots_blocked`, because the
+same file in production would block Google.
 A better setup serves the production robots.txt on staging and sends an
 `X-Robots-Tag: noindex` header instead. That HTTP header tells search
 engines not to index the page, the same as a noindex meta tag. Pass

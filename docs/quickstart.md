@@ -75,9 +75,9 @@ computer.
 
 The output starts with a summary of what would hurt search. Then it lists
 the findings by severity, and the ones below the fail-on level come last.
-Under each finding that fails the run, a line says what to do, and a second
-line names the rule, for example `rule: noindex_added`. You need that name
-when you want to ignore a finding.
+Under each finding that fails the run, a line says what to do. Each finding
+also has a line that names its rule, for example `rule: noindex_added`. You
+need that name when you want to ignore a finding.
 Add `--html demo.html` to write the same report as a web page.
 
 The demo itself exits with code 0, so you can run it anywhere. A real

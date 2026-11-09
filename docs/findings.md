@@ -4,10 +4,11 @@ Every finding has a rule id and a severity. The id, such as
 `noindex_added`, appears in JSON and HTML reports and in ignore rules. The
 severity decides whether the run fails.
 
-This page explains each rule and what to do about it. The text output and
-the job summary show the first sentence of that advice for each finding
-that fails the run, together with the rule id (`rule: noindex_added`). The
-HTML report shows the full advice next to each finding.
+This page explains each rule and what to do about it. The text output
+shows the rule id under each finding (`rule: noindex_added`). For each
+finding that fails the run, the text output and the job summary also show
+the first sentence of the advice. The HTML report shows the full advice
+next to each finding.
 
 ## What the SEO terms mean
 
@@ -480,7 +481,12 @@ them does not fail a run by default.
 important crawler in the table above. robots.txt now blocks a crawler from
 indexable pages that it could crawl before. Crawlers with the same blocked
 pages share one finding. A new `Disallow: /` shows up as every page being
-blocked.
+blocked. The finding's URL is the robots.txt file, and it lists the blocked
+pages.
+
+When the new rule also blocks auditroo, auditroo still checks the blocked
+pages, as long as the earlier robots.txt allowed them. Problems on those
+pages are reported as well.
 
 What to do: remove or narrow the `Disallow` rule. Blocked pages drop out of
 search results over time.

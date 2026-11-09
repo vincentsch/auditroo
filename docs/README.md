@@ -15,6 +15,7 @@ Guides:
 Reference:
 
 - [Commands](commands.md): every command and flag
+- [JSON report](json.md): the fields of the report that `--json` and `--out` write
 - [Troubleshooting](troubleshooting.md)
 - [FAQ](faq.md)
 - [Experimental features](experimental.md): features that may still change before 1.0

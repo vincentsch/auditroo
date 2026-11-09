@@ -17,7 +17,9 @@ The usual causes are:
 
 - robots.txt, the file with the rules for crawlers, blocks auditroo. If it
   blocks only auditroo and not Googlebot, auditroo stops with exit code 2
-  and says so. On your own site, add `--ignore-robots`.
+  and says so. On your own site, add `--ignore-robots`. `compare` and `diff`
+  still crawl the pages that production's robots.txt, or the baseline's,
+  allowed.
 - The start page redirects to another host, for example from `example.com`
   to `shop.example.com`. Start the crawl at the final URL. auditroo follows
   links to the `www` twin of the start host, but not to other subdomains.

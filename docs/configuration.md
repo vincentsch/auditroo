@@ -47,7 +47,7 @@ ignore = [
 | `production_url` | none | The live site, when you crawl a preview or a local build of it, for example `"https://www.example.com"`. Its URLs count as the crawled site's own, for example in the sitemap or in canonical tags (the tag that names the URL Google should show for a page). `--production-url` overrides it. |
 | `user_agent` | `auditroo/<version> (+https://github.com/vincentsch/auditroo)` | The User-Agent header. |
 | `headers` | `[]` | Extra request headers, as `{ name = "...", value = "..." }`. |
-| `respect_robots` | `true` | Set to `false` to crawl pages that robots.txt blocks for auditroo. Same as `--ignore-robots`. |
+| `respect_robots` | `true` | Set to `false` to crawl pages that robots.txt blocks for auditroo. Same as `--ignore-robots`. In `compare` it applies to production too. |
 | `render_js` | `false` | Render pages in headless Chrome. See [JavaScript sites](javascript.md). |
 
 Patterns match the path and query of a URL, so they start with `/` or `*`.

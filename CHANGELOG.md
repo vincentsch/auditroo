@@ -35,6 +35,10 @@ The first public release. It contains:
   engines and the main AI crawlers. auditroo reads it the way Google does.
   Each host has its own file, and `User-agent: Googlebot/2.1` counts for
   Googlebot. A 429 or 5xx answer blocks the whole site.
+- When a preview's robots.txt blocks pages that production's robots.txt
+  allows, `compare` reports the block and still checks those pages. `diff`
+  does the same with the baseline's robots.txt. A rule that names auditroo
+  itself is always followed.
 - noindex counts when it applies to Google. That is a robots or googlebot
   meta tag, or an `X-Robots-Tag` header without a crawler name or for
   googlebot.
@@ -58,11 +62,14 @@ The first public release. It contains:
 ### Output
 
 - Text output that starts with a summary. Repeated findings are grouped,
-  and URLs are shown as paths. Each finding that fails the run has a line
-  on what to do and its rule id, for ignore rules.
+  and URLs are shown as paths. Each finding names its rule id, for ignore
+  rules. Each finding that fails the run also has a line on what to do.
+- When some URLs were not checked, the output says so above the findings.
+  The notes list the URLs that robots.txt kept auditroo from.
 - `--format markdown` for job summaries and pull request comments.
 - `--format github` for GitHub Actions annotations.
-- `--format json` for the full report as data.
+- `--format json` for the full report as data. `docs/json.md` describes
+  its fields.
 - `--html` writes a standalone HTML report with advice for each finding.
 - `--junit` writes JUnit XML.
 - Exit codes that let CI tell a failed check (1) from a usage error (2) and
@@ -73,8 +80,10 @@ The first public release. It contains:
 
 - A GitHub Action that installs a release binary and adds the report to the
   job summary and the annotations.
-- CI recipes in `docs/ci.md`, for Vercel previews and for builds served
-  inside the CI job.
+- CI recipes in `docs/ci.md`:
+  - Vercel previews
+  - preview URLs that you know in advance
+  - builds served inside the CI job
 - Release binaries for the three desktop systems on x86_64 and arm64, with
   SHA-256 checksums and build provenance. The Linux binaries are static.
 - The GitHub Action installs the auditroo release of its own version unless

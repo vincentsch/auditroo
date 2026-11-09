@@ -24,7 +24,7 @@ Some of the mistakes it finds:
 auditroo is one binary file with nothing else to install. It is open source
 under the MIT license.
 
-[Quickstart](docs/quickstart.md) · [CI recipes](docs/ci.md) · [Findings](docs/findings.md) · [Commands](docs/commands.md) · [AGENTS.md](AGENTS.md)
+[Quickstart](docs/quickstart.md) · [CI recipes](docs/ci.md) · [Findings](docs/findings.md) · [JSON report](docs/json.md) · [Commands](docs/commands.md) · [AGENTS.md](AGENTS.md)
 
 ## Set it up with your coding agent
 
@@ -77,7 +77,7 @@ Critical
       after:  https://staging.harbor-coffee.test/coffee/colombia-huila/
       what to do: Point the canonical tag at the page's own URL.
       rule: canonical_external
-  robots.txt now blocks Googlebot and 9 other crawlers from 1 page that they could crawl before
+  /robots.txt now blocks Googlebot and 9 other crawlers from 1 page that they could crawl before
       crawlers: Googlebot, Bingbot, OAI-SearchBot (ChatGPT search), ChatGPT-User, PerplexityBot, Claude-SearchBot, GPTBot (OpenAI training), ClaudeBot (Anthropic training), Google-Extended (Gemini training), CCBot (Common Crawl)
       blocked: /brewing-guide/
       what to do: Remove or narrow the Disallow rule in robots.txt.
@@ -100,6 +100,7 @@ Below the fail-on level (high)
   medium  /contact/ has a new title
           before: "Contact | Harbor Coffee Roasters"
           after:  "Contact us | Harbor Coffee Roasters"
+          rule: title_changed
 
 Compared the preview http://127.0.0.1:36359/ (8 pages) with production http://127.0.0.1:37243/ (9 pages). Took 0.2 s.
 ```
@@ -151,6 +152,10 @@ Vercel and Netlify add a noindex header to every preview. auditroo ignores
 that header on their preview domains, but it still checks the robots meta
 tag in your HTML.
 
+When the preview's robots.txt blocks pages that production's robots.txt
+allows, auditroo reports the new block. It still checks those pages on the
+preview, so the block cannot hide other problems behind it.
+
 A run never passes when auditroo could not see the site. If production
 answers 403, the run stops with an error. If every page of the preview
 redirects to a login page, that is a critical finding.
@@ -158,15 +163,21 @@ redirects to a login page, that is a critical finding.
 ## Add it to pull requests
 
 If you deploy previews on Vercel, this GitHub Actions workflow runs after
-each preview deployment:
+each preview deployment. It does not run for production deployments:
 
 ```yaml
+# .github/workflows/seo.yml
 name: SEO
 on: deployment_status
 
+permissions:
+  contents: read
+
 jobs:
   auditroo:
-    if: github.event.deployment_status.state == 'success'
+    if: >-
+      github.event.deployment_status.state == 'success' &&
+      !startsWith(github.event.deployment.environment, 'Production')
     runs-on: ubuntu-latest
     steps:
       - uses: vincentsch/auditroo@v0.1.0
@@ -178,8 +189,14 @@ jobs:
 
 The job fails when a finding is high or critical. The report goes to the job
 summary, and the findings show up as annotations on the pull request.
-[CI recipes](docs/ci.md) has more setups, for example for Netlify or for a
-preview behind password protection.
+
+Leave `--ignore-robots` out of CI. In `compare` it applies to production
+too, so auditroo would also crawl the pages that your live robots.txt
+blocks for it. Pages that only the preview's robots.txt blocks are checked
+without the flag.
+
+[CI recipes](docs/ci.md) has more setups, for example for a preview URL
+that you know in advance, or for a preview behind password protection.
 
 ## What the findings mean
 
@@ -194,8 +211,8 @@ which is `high` unless you change it.
 | Low | A page has a new meta description. |
 | Info | A new page was added. |
 
-Under each finding that fails the run, the output says what to do and
-names the rule, for example `rule: title_changed`.
+Every finding in the output names its rule, for example
+`rule: title_changed`. Findings that fail the run also say what to do.
 [Findings](docs/findings.md) explains each rule in more detail. When a
 finding is expected, for example because you changed a title on purpose,
 add an ignore rule with that name to `auditroo.toml`, or pass
@@ -218,6 +235,7 @@ has the details.
 - [Crawling your own site](docs/own-site.md): firewalls and crawl speed
 - [JavaScript sites](docs/javascript.md): rendering pages in headless Chrome
 - [Configuration](docs/configuration.md): fail-on and ignore rules in `auditroo.toml`
+- [JSON report](docs/json.md): the fields of `--json` and `--out`, for scripts and coding agents
 - [Troubleshooting](docs/troubleshooting.md) and [FAQ](docs/faq.md)
 - [Experimental features](docs/experimental.md): commands that may still change before 1.0
 

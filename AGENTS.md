@@ -73,10 +73,14 @@ the user.
 Read the output and summarize it for the user in plain words. Start with
 critical and high findings. `docs/findings.md` in the auditroo repository
 explains each rule id and what to do about it. The text output shows the
-rule id under each finding that fails the run, for example
-`rule: canonical_external`. For findings below the fail-on level, add
-`--out report.json` and read the `rule` field of each finding. Do not change
-the site to fix findings unless the user asks you to.
+rule id under each finding, for example `rule: canonical_external`. If you
+want the result as data, add `--out report.json`. `docs/json.md` describes
+its fields. Do not change the site to fix findings unless the user asks you
+to.
+
+When the output says "This result is incomplete", auditroo could not check
+some URLs. The notes at the end of the output say which and why. Tell the
+user, so a passing check is not read as a clean site.
 
 The exit code tells you how the run went:
 
@@ -99,6 +103,9 @@ Pick the recipe from `docs/ci.md` that fits the project:
   `compare` against the preview URL from the event.
 - A host that creates GitHub deployments for its previews: the same
   workflow.
+- A preview URL that you can build from the pull request number or the
+  branch, or a deploy step in the same job that prints the URL: a workflow
+  on `pull_request`, as in "When you know the preview URL".
 - Anything else with a static build: build and serve the site in the job,
   then run `compare` against `localhost`.
 - Other CI systems: install with `install.sh` and run `auditroo compare`
@@ -120,6 +127,9 @@ When you write the workflow:
 - Use the default `--fail-on high` unless the user wants something else.
   `compare` only reports what the change makes worse, so existing problems
   on production do not fail pull requests.
+- Do not add `--ignore-robots`. In `compare` it also applies to
+  production. auditroo checks pages that only the preview's robots.txt
+  blocks without it.
 
 ## 5. Ignore findings that the user expects
 

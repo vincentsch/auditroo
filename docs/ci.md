@@ -157,6 +157,23 @@ With `fail: false` the step does not fail because of findings. It still
 fails when auditroo cannot finish, with exit code 2 or 3. Use the `passed`
 output to decide what happens next.
 
+## robots.txt and --ignore-robots
+
+Leave `--ignore-robots` out of your CI workflow. In `compare` it applies to
+both sites. auditroo would then also crawl the pages of your live site that
+its robots.txt blocks for auditroo.
+
+You do not need the flag when a pull request changes robots.txt. Say the
+preview's robots.txt blocks `/docs/`, and production's robots.txt allows
+it. auditroo reports the new block as `robots_blocked` and still checks the
+pages under `/docs/` on the preview, so a broken link there also fails the
+check. auditroo always follows a rule that names auditroo itself, such as
+`User-agent: auditroo`.
+
+Some URLs can still go unchecked, because production's robots.txt blocks
+auditroo from them too. The output then says above the findings that the
+result is incomplete, and the notes list those URLs.
+
 ## Netlify, Cloudflare Pages and other hosts
 
 auditroo needs the URL of a finished preview. How you get it depends on the
@@ -167,8 +184,75 @@ host.
   as "deployed to Preview" with a link.
 - Netlify and Cloudflare Pages also add the noindex header to previews.
   auditroo ignores it on `*.netlify.app` and `*.pages.dev` hosts.
-- When you do not get a preview URL from an event, build the site inside the
-  job and compare that build with production. The next section shows how.
+- If you know the preview URL in advance, or an earlier step in the job
+  prints it, run the workflow on `pull_request`.
+  [When you know the preview URL](#when-you-know-the-preview-url) shows how.
+- If you get no preview URL at all, build the site inside the job and
+  compare that build with production.
+  [Build the site inside the job](#build-the-site-inside-the-job) shows how.
+
+## When you know the preview URL
+
+Some hosts give each pull request or branch its own preview URL, such as
+`https://pr-42.preview.example.com`. This workflow runs on each pull
+request. It waits until the preview answers, then compares it with
+production:
+
+```yaml
+# .github/workflows/seo.yml
+name: SEO
+on: pull_request
+
+permissions:
+  contents: read
+
+jobs:
+  auditroo:
+    runs-on: ubuntu-latest
+    env:
+      # The preview URL of this pull request. Change it to your host's pattern.
+      PREVIEW_URL: https://pr-${{ github.event.pull_request.number }}.preview.example.com
+    steps:
+      - name: Wait for the preview
+        run: |
+          for i in $(seq 1 60); do
+            curl -fsS -o /dev/null "$PREVIEW_URL" && exit 0
+            sleep 10
+          done
+          echo "The preview at $PREVIEW_URL did not answer within 10 minutes." >&2
+          exit 1
+      - uses: vincentsch/auditroo@v0.1.0
+        with:
+          args: compare https://www.example.com "$PREVIEW_URL"
+          html: auditroo-report.html
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: auditroo-report
+          path: auditroo-report.html
+          if-no-files-found: ignore
+```
+
+The wait only checks that the preview answers. If your host still serves
+the old build until the new one is ready, auditroo may check the old build.
+Then use the URL from the deploy step below, or the `deployment_status`
+workflow above.
+
+When a step of the same job deploys the preview and writes its URL as a
+step output, pass that output instead. Here the deploy step has
+`id: deploy` and writes `url=...` to `$GITHUB_OUTPUT`:
+
+```yaml
+      - uses: vincentsch/auditroo@v0.1.0
+        env:
+          PREVIEW_URL: ${{ steps.deploy.outputs.url }}
+        with:
+          args: compare https://www.example.com "$PREVIEW_URL"
+```
+
+If every pull request deploys to the same staging URL, save that URL as a
+repository variable, for example `STAGING_URL`. Then set
+`PREVIEW_URL: ${{ vars.STAGING_URL }}` in the first workflow.
 
 ## Build the site inside the job
 
