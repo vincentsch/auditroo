@@ -401,7 +401,9 @@ pub struct Finding {
     /// Id of the custom assertion or quality budget.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub check_id: Option<String>,
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    /// An ignore rule matched. Always written, as `false` too, so scripts
+    /// can filter on it without a default.
+    #[serde(default)]
     pub ignored: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub impact: Vec<ImpactAnnotation>,

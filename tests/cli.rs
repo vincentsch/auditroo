@@ -214,6 +214,62 @@ async fn check_compare_and_report_against_the_demo_sites() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn ignored_findings_are_listed_with_rule_and_url() {
+    let production = DemoServer::start(Variant::Production).await.unwrap();
+    let preview = DemoServer::start(Variant::Preview).await.unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let output = auditroo(&dir)
+        .args([
+            "compare",
+            &production.url(),
+            &preview.url(),
+            "--rate-limit-ms",
+            "0",
+            "--quiet",
+            "--ignore",
+            "{ rule = \"title_changed\", url = \"/contact/\" }",
+            "--out",
+            "report.json",
+        ])
+        .assert()
+        .code(1)
+        .get_output()
+        .stdout
+        .clone();
+    let output = String::from_utf8(output).unwrap();
+    let ignored = output
+        .find("\nIgnored (1 finding matched an ignore rule and is not counted)\n")
+        .unwrap_or_else(|| panic!("no ignored section:\n{output}"));
+    assert!(
+        output[ignored..].contains(
+            "  medium  /contact/ has a new title\n          before: \"Contact | Harbor Coffee Roasters\"\n"
+        ),
+        "{output}"
+    );
+    assert!(
+        output[ignored..].contains("          rule: title_changed\n"),
+        "{output}"
+    );
+
+    // Every finding says whether it is ignored, false included.
+    let report: Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.path().join("report.json")).unwrap())
+            .unwrap();
+    for finding in report["findings"].as_array().unwrap() {
+        let expected = finding["rule"] == "title_changed";
+        assert_eq!(finding["ignored"], Value::Bool(expected), "{finding}");
+    }
+
+    auditroo(&dir)
+        .args(["report", "report.json", "--format", "markdown"])
+        .assert()
+        .code(0)
+        .stdout(predicate::str::contains(
+            "<summary>1 ignored finding, not counted</summary>\n\n- `/contact/` has a new title (`rule: title_changed`)\n",
+        ));
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn snapshot_then_diff() {
     let production = DemoServer::start(Variant::Production).await.unwrap();
     let preview = DemoServer::start(Variant::Preview).await.unwrap();

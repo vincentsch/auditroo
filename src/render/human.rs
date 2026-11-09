@@ -101,62 +101,28 @@ pub fn render(report: &Report, options: HumanOptions) -> String {
         out.push_str(&style.paint("1", &title));
         out.push('\n');
         for group in passing {
-            let label = format!("{:<6}", group.severity.as_str());
-            if group.severity == Severity::Info {
-                out.push_str(&format!(
-                    "  {}  {}\n",
-                    style.severity(group.severity, &label),
-                    group.summary()
-                ));
-            } else if group.collapsed() || group.findings.len() > 1 {
-                out.push_str(&format!(
-                    "  {}  {}\n",
-                    style.severity(group.severity, &label),
-                    group.summary()
-                ));
-                let urls: Vec<String> = group
-                    .findings
-                    .iter()
-                    .filter_map(|finding| finding.url.clone())
-                    .collect();
-                if !urls.is_empty() {
-                    out.push_str(&format!(
-                        "          {}\n",
-                        url_list(&urls, urls.len(), 6, &site)
-                    ));
-                }
-                for line in example_lines(group, &site) {
-                    out.push_str(&format!("          {line}\n"));
-                }
-            } else {
-                let finding = group.findings[0];
-                out.push_str(&format!(
-                    "  {}  {}\n",
-                    style.severity(group.severity, &label),
-                    sentence(finding, &site)
-                ));
-                for line in detail_lines(finding, &site)
-                    .into_iter()
-                    .chain(super::impact_line(report, finding))
-                {
-                    out.push_str(&format!("          {line}\n"));
-                }
-            }
-            // The rule id is what an ignore rule needs.
-            out.push_str(&format!(
-                "          {}\n",
-                style.paint("2", &group.ignore_key())
-            ));
+            render_short_group(&mut out, group, &site, report, &style);
         }
     }
 
-    let ignored = report.counts.ignored;
-    if ignored > 0 {
-        out.push_str(&format!(
-            "\n{ignored} finding{} matched an ignore rule and {} not counted.\n",
-            if ignored == 1 { "" } else { "s" },
-            if ignored == 1 { "is" } else { "are" }
+    // Ignored findings are listed too, so you can see what an ignore rule
+    // hides.
+    let ignored: Vec<&Group<'_>> = groups.iter().filter(|group| group.ignored).collect();
+    if !ignored.is_empty() {
+        let count = report.counts.ignored;
+        out.push('\n');
+        out.push_str(&style.paint(
+            "1",
+            &format!(
+                "Ignored ({count} finding{} matched an ignore rule and {} not counted)",
+                if count == 1 { "" } else { "s" },
+                if count == 1 { "is" } else { "are" }
+            ),
         ));
+        out.push('\n');
+        for group in ignored {
+            render_short_group(&mut out, group, &site, report, &style);
+        }
     }
 
     if !report.notes.is_empty() {
@@ -184,6 +150,50 @@ pub fn render(report: &Report, options: HumanOptions) -> String {
         }
     }
     out
+}
+
+/// A group that does not fail the run: one line with its severity, the
+/// details below it, and the rule id that an ignore rule needs.
+fn render_short_group(
+    out: &mut String,
+    group: &Group<'_>,
+    site: &Site,
+    report: &Report,
+    style: &Style,
+) {
+    let label = style.severity(group.severity, &format!("{:<6}", group.severity.as_str()));
+    if group.severity == Severity::Info {
+        out.push_str(&format!("  {label}  {}\n", group.summary()));
+    } else if group.collapsed() || group.findings.len() > 1 {
+        out.push_str(&format!("  {label}  {}\n", group.summary()));
+        let urls: Vec<String> = group
+            .findings
+            .iter()
+            .filter_map(|finding| finding.url.clone())
+            .collect();
+        if !urls.is_empty() {
+            out.push_str(&format!(
+                "          {}\n",
+                url_list(&urls, urls.len(), 6, site)
+            ));
+        }
+        for line in example_lines(group, site) {
+            out.push_str(&format!("          {line}\n"));
+        }
+    } else {
+        let finding = group.findings[0];
+        out.push_str(&format!("  {label}  {}\n", sentence(finding, site)));
+        for line in detail_lines(finding, site)
+            .into_iter()
+            .chain(super::impact_line(report, finding))
+        {
+            out.push_str(&format!("          {line}\n"));
+        }
+    }
+    out.push_str(&format!(
+        "          {}\n",
+        style.paint("2", &group.ignore_key())
+    ));
 }
 
 /// A failing group. Each finding, or the collapsed group as a whole, ends with

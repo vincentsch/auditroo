@@ -98,6 +98,37 @@ pub fn render(report: &Report) -> String {
         out.push_str("</details>\n\n");
     }
 
+    let ignored: Vec<&Group<'_>> = groups.iter().filter(|group| group.ignored).collect();
+    if !ignored.is_empty() {
+        let count = report.counts.ignored;
+        out.push_str(&format!(
+            "<details>\n<summary>{count} ignored finding{}, not counted</summary>\n\n",
+            if count == 1 { "" } else { "s" }
+        ));
+        for group in ignored {
+            if group.collapsed() {
+                out.push_str(&format!(
+                    "- {}: {} (`{}`)\n",
+                    group.summary(),
+                    where_cell(group, &site),
+                    group.ignore_key()
+                ));
+                continue;
+            }
+            for finding in &group.findings {
+                out.push_str(&format!(
+                    "- {} (`{}`)\n",
+                    code_urls(
+                        &sentence(finding, &site),
+                        finding.url.as_deref().map(|url| site.display(url))
+                    ),
+                    super::ignore_key(finding)
+                ));
+            }
+        }
+        out.push_str("\n</details>\n\n");
+    }
+
     if !report.notes.is_empty() {
         for note in &report.notes {
             out.push_str(&format!("- {}\n", escape_inline(note)));
