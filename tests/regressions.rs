@@ -616,7 +616,47 @@ async fn robots_txt_blocks_a_section() {
         &[Rule::RobotsBlocked, Rule::NoindexAdded, Rule::BrokenLink],
     );
     assert!(report.current.robots_denied.is_empty());
-    assert!(!report.incomplete(), "{:?}", report.notes);
+    assert!(!report.incomplete, "{:?}", report.notes);
+    assert!(render(&report).starts_with("FAIL  3 problems"));
+    assert!(auditroo::render::markdown::render(&report).starts_with("### auditroo: 3 problems"));
+    let json: serde_json::Value =
+        serde_json::from_str(&auditroo::report::render_json(&report)).unwrap();
+    assert_eq!(json["incomplete"], false);
+}
+
+#[tokio::test]
+async fn a_pass_that_missed_pages_says_incomplete_in_the_headline() {
+    // --max-pages stops the crawl of an unchanged site early. Nothing fails,
+    // but the first line must not read as if the whole site were fine.
+    let baseline = baseline().await;
+    let server = DocsSite::new().serve(None).await;
+    let mut limited = settings();
+    limited.crawl.max_pages = 2;
+    let start = server.url("/");
+    let extras = CrawlExtras::compared_with(baseline, &start);
+    let current = crawl(start, &limited, extras, &mut Progress::quiet(), "test")
+        .await
+        .unwrap();
+    let report = evaluate(Evaluation {
+        command: ReportCommand::Diff,
+        baseline: Some(baseline),
+        current: &current,
+        settings: &limited,
+        notes: Vec::new(),
+    })
+    .await
+    .unwrap();
+    assert!(report.passed, "{}", render(&report));
+    assert!(report.incomplete);
+    let text = render(&report);
+    assert!(
+        text.starts_with("PASS (incomplete)  No SEO regressions found\n"),
+        "{text}"
+    );
+    assert!(auditroo::render::markdown::render(&report)
+        .starts_with("### auditroo (incomplete): No SEO regressions found\n"));
+    assert!(auditroo::render::html::render(&report)
+        .contains("<p class=\"verdict pass\">PASS (incomplete)</p>"));
 }
 
 #[tokio::test]
@@ -656,7 +696,12 @@ async fn urls_that_robots_txt_still_blocks_are_listed() {
         "{note}"
     );
 
+    // The headline says so in every format, and so does the JSON.
     let text = render(&report);
+    assert!(
+        text.starts_with("FAIL (incomplete)  1 problem would hurt search"),
+        "{text}"
+    );
     let warning = text
         .find("This result is incomplete, because robots.txt blocks auditroo from 2 URLs.")
         .expect("the incomplete line");
@@ -664,17 +709,26 @@ async fn urls_that_robots_txt_still_blocks_are_listed() {
     assert!(warning < first_finding, "{text}");
     let markdown = auditroo::render::markdown::render(&report);
     assert!(
+        markdown.starts_with("### auditroo (incomplete): 1 problem would hurt search\n"),
+        "{markdown}"
+    );
+    assert!(
         markdown.contains("> [!WARNING]\n> This result is incomplete"),
         "{markdown}"
     );
     let html = auditroo::render::html::render(&report);
+    assert!(html.contains("<p class=\"verdict fail\">FAIL (incomplete)</p>"));
     assert!(html.contains("<p class=\"incomplete\">This result is incomplete"));
     let json: serde_json::Value =
         serde_json::from_str(&auditroo::report::render_json(&report)).unwrap();
+    assert_eq!(json["incomplete"], true);
     assert_eq!(
         json["current"]["robots_denied"].as_array().unwrap().len(),
         2
     );
+    let reread = auditroo::report::report_from_str(&auditroo::report::render_json(&report))
+        .expect("the report reads back");
+    assert!(reread.incomplete);
 }
 
 #[tokio::test]
@@ -868,7 +922,7 @@ async fn preview_build_with_production_urls_has_no_findings() {
     assert!(report.passed);
     // Production is one of the two sites, so there is nothing to suggest.
     assert_eq!(report.suggested_production_url, None);
-    assert!(!report.incomplete());
+    assert!(!report.incomplete);
 }
 
 #[tokio::test]
@@ -1694,7 +1748,7 @@ async fn two_local_builds_of_one_site() {
         report.suggested_production_url.as_deref(),
         Some(live_origin.as_str())
     );
-    assert!(report.incomplete());
+    assert!(report.incomplete);
     let text = render(&report);
     let hint = text
         .find(&format!(

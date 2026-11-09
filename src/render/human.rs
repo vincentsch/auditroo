@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use super::{
     capitalize, groups, headline, incomplete_line, scope_sentence, site_for, summary_lines,
-    url_list, Group,
+    url_list, verdict, Group,
 };
 use crate::findings::{Finding, Severity};
 use crate::report::{Report, ReportCommand};
@@ -50,12 +50,12 @@ pub fn render(report: &Report, options: HumanOptions) -> String {
     let groups = groups(report);
     let mut out = String::new();
 
-    let verdict = if report.passed {
-        style.paint("1;32", "PASS")
-    } else {
-        style.paint("1;31", "FAIL")
-    };
-    out.push_str(&format!("{verdict}  {}", headline(report)));
+    let color = if report.passed { "1;32" } else { "1;31" };
+    out.push_str(&format!(
+        "{}  {}",
+        style.paint(color, verdict(report)),
+        headline(report)
+    ));
     if !report.passed {
         out.push_str(&format!(" (fails on {} and above)", report.fail_on));
     }
@@ -141,7 +141,7 @@ pub fn render(report: &Report, options: HumanOptions) -> String {
     }
     out.push('\n');
     if report.findings.is_empty() && report.command != ReportCommand::Check {
-        if report.incomplete() {
+        if report.incomplete {
             out.push_str(
                 "Nothing changed that auditroo could check, but the result is incomplete. The notes say why.\n",
             );

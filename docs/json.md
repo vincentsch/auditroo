@@ -49,6 +49,7 @@ findings:
   },
   "fail_on": "high",
   "passed": false,
+  "incomplete": false,
   "counts": {
     "critical": 4,
     "high": 3,
@@ -95,8 +96,8 @@ findings:
 ```
 
 auditroo leaves out fields that are empty or 0. Read them with a default,
-for example `.notes // []` in jq. `ignored` is always there, as `true` or
-`false`.
+for example `.notes // []` in jq. `passed` and `incomplete` are always
+there, as `true` or `false`. So is `ignored` on every finding.
 
 ## The summary fields
 
@@ -111,6 +112,7 @@ for example `.notes // []` in jq. `ignored` is always there, as `true` or
 | `baseline` | The crawl it was compared with. In `compare` that is production, and in `diff` the snapshot. Missing for `check`. |
 | `fail_on` | The severity that fails the run, from `--fail-on` or `auditroo.toml`. |
 | `passed` | `true` when no finding reached `fail_on`. Ignored findings do not count. |
+| `incomplete` | `true` when auditroo knows it did not check everything, so a pass does not mean the whole site is fine. The next sections say when. |
 | `counts` | The number of findings per severity, such as `"high": 3`. `ignored` counts the findings that matched an ignore rule. They are not counted under their severity. |
 | `notes` | Plain sentences about what auditroo could not check, or about what it did for you, such as ignoring a preview's noindex header. |
 | `not_compared` | The number of indexable baseline pages that the current crawl did not reach, for example because of `--max-pages`. |
@@ -142,13 +144,19 @@ files block, and URLs that a new rule for auditroo itself blocks.
 ## When the result is incomplete
 
 A run can pass although auditroo did not see every page, or although most
-rules had nothing to check. The text output then says "This result is
-incomplete" above the findings, and the notes say why. In the JSON report, any of these means the same:
+rules had nothing to check. The text output then starts with
+`PASS (incomplete)` or `FAIL (incomplete)`. A line above the findings says
+"This result is incomplete", and the notes say why. In the JSON report,
+`incomplete` is `true`. It is `true` when any of these is the case:
 
 - `current.robots_denied` is not empty.
 - `current.truncated` is `true`.
 - `not_compared` is greater than 0.
 - `suggested_production_url` is set.
+
+```sh
+jq '.incomplete' report.json
+```
 
 ## The finding fields
 

@@ -235,10 +235,21 @@ pub fn headline(report: &Report) -> String {
     }
 }
 
+/// "PASS" or "FAIL", with "(incomplete)" when auditroo knows it did not see
+/// everything, so that the first line already says so.
+pub fn verdict(report: &Report) -> &'static str {
+    match (report.passed, report.incomplete) {
+        (true, false) => "PASS",
+        (true, true) => "PASS (incomplete)",
+        (false, false) => "FAIL",
+        (false, true) => "FAIL (incomplete)",
+    }
+}
+
 /// A sentence for the top of the output when some URLs were not checked, so
 /// that a pass is not read as "the whole site is fine". The notes say more.
 pub fn incomplete_line(report: &Report) -> Option<String> {
-    if !report.incomplete() {
+    if !report.incomplete {
         return None;
     }
     // This one comes first, because one flag fixes it and it hides the most.

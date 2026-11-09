@@ -10,7 +10,12 @@ pub fn render(report: &Report) -> String {
     let groups = groups(report);
     let mut out = String::new();
 
-    out.push_str(&format!("### auditroo: {}\n\n", headline(report)));
+    let label = if report.incomplete {
+        "auditroo (incomplete)"
+    } else {
+        "auditroo"
+    };
+    out.push_str(&format!("### {label}: {}\n\n", headline(report)));
     if report.passed {
         out.push_str("> [!NOTE]\n");
         out.push_str(&format!(

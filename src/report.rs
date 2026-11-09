@@ -58,6 +58,9 @@ pub struct Report {
     pub baseline: Option<CrawlSummary>,
     pub fail_on: Severity,
     pub passed: bool,
+    /// Some URLs were not checked, or most rules had nothing to check, so a
+    /// pass does not mean the whole site is fine. The notes say why.
+    pub incomplete: bool,
     pub counts: SeverityCounts,
     /// Plain sentences about what could not be compared, or about what
     /// auditroo did for the user, such as ignoring a preview's noindex
@@ -198,6 +201,7 @@ impl Report {
             baseline: input.baseline.map(CrawlSummary::from_snapshot),
             fail_on: input.gate.fail_on,
             passed: true,
+            incomplete: false,
             counts: SeverityCounts::default(),
             notes: input.notes,
             not_compared: 0,
@@ -212,7 +216,7 @@ impl Report {
     }
 
     /// Apply ignore rules, sort, and decide the gate. Call again after
-    /// adding findings.
+    /// adding findings or crawl details.
     pub fn finish(&mut self) {
         for finding in &mut self.findings {
             finding.ignored = self
@@ -247,6 +251,10 @@ impl Report {
         }
         self.counts = counts;
         self.passed = !self.findings.iter().any(|finding| self.fails_gate(finding));
+        self.incomplete = !self.current.robots_denied.is_empty()
+            || self.current.truncated
+            || self.not_compared > 0
+            || self.suggested_production_url.is_some();
     }
 
     /// The primary impact metric of each finding, when `[impact]` asks to
@@ -290,15 +298,6 @@ impl Report {
         self.findings
             .iter()
             .filter(move |finding| self.fails_gate(finding))
-    }
-
-    /// Whether some URLs were not checked, or most rules had nothing to
-    /// check, so a pass does not mean the whole site is fine.
-    pub fn incomplete(&self) -> bool {
-        !self.current.robots_denied.is_empty()
-            || self.current.truncated
-            || self.not_compared > 0
-            || self.suggested_production_url.is_some()
     }
 
     pub fn exit_code(&self) -> i32 {

@@ -66,8 +66,10 @@ The first public release. It contains:
 - Text output that starts with a summary. Repeated findings are grouped,
   and URLs are shown as paths. Each finding names its rule id, for ignore
   rules. Each finding that fails the run also has a line on what to do.
-- When some URLs were not checked, the output says so above the findings.
-  The notes list the URLs that robots.txt kept auditroo from.
+- When some URLs were not checked, the first line says `PASS (incomplete)`
+  or `FAIL (incomplete)`, and a line above the findings says why. The notes
+  list the URLs that robots.txt kept auditroo from. The JSON report has
+  `incomplete`.
 - When both sites of a `compare` or `diff` point their canonical tags or
   sitemap at the same other host, the output says above the findings that
   `--production-url` with that host is probably missing.

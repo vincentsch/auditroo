@@ -7,7 +7,7 @@ use regex::Regex;
 
 use super::{
     format_time, groups, headline, impact_line, incomplete_line, scope_sentence, site_for,
-    summary_lines, Group,
+    summary_lines, verdict, Group,
 };
 use crate::analysis::LogAnalysisReport;
 use crate::findings::{format_count, Finding, Severity};
@@ -35,11 +35,11 @@ pub fn render_with_logs(report: &Report, logs: Option<&LogAnalysisReport>) -> St
         escape(&host)
     ));
 
-    let verdict = if report.passed { "pass" } else { "fail" };
+    let verdict_class = if report.passed { "pass" } else { "fail" };
     html.push_str(&format!(
-        "<header class=\"top\">\n<p class=\"brand\">auditroo {}</p>\n<p class=\"verdict {verdict}\">{}</p>\n<h1>{}</h1>\n<p class=\"scope\">{}</p>\n<dl class=\"meta\">\n<div><dt>Fails on</dt><dd>{} and above</dd></div>\n<div><dt>Pages checked</dt><dd>{}</dd></div>\n<div><dt>Report created</dt><dd>{}</dd></div>\n</dl>\n</header>\n",
+        "<header class=\"top\">\n<p class=\"brand\">auditroo {}</p>\n<p class=\"verdict {verdict_class}\">{}</p>\n<h1>{}</h1>\n<p class=\"scope\">{}</p>\n<dl class=\"meta\">\n<div><dt>Fails on</dt><dd>{} and above</dd></div>\n<div><dt>Pages checked</dt><dd>{}</dd></div>\n<div><dt>Report created</dt><dd>{}</dd></div>\n</dl>\n</header>\n",
         escape(report.command.as_str()),
-        if report.passed { "PASS" } else { "FAIL" },
+        verdict(report),
         escape(&headline(report)),
         prose(&scope_sentence(report)),
         report.fail_on,

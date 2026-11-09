@@ -79,9 +79,10 @@ want the result as data, add `--out report.json`. `docs/json.md` describes
 its fields. Do not change the site to fix findings unless the user asks you
 to.
 
-When the output says "This result is incomplete", auditroo could not check
-some URLs. The notes at the end of the output say which and why. Tell the
-user, so a passing check is not read as a clean site.
+When the first line says `PASS (incomplete)` or `FAIL (incomplete)`,
+auditroo could not check everything. In the JSON report, `incomplete` is
+`true`. The line above the findings and the notes at the end say why. Tell
+the user, so a passing check is not read as a clean site.
 
 The exit code tells you how the run went:
 
