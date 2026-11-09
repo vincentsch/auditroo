@@ -111,7 +111,8 @@ Pick the recipe from `docs/ci.md` that fits the project:
   CLI is logged in, `gh api repos/OWNER/REPO/commits/main/check-runs --jq
   '.check_runs[].name'` lists the check names of the latest commit on
   `main`. Otherwise ask the user to copy the name from a commit's checks on
-  GitHub.
+  GitHub. With a wrong name, the step stops after 5 minutes and prints the
+  check names it found on the commit.
 - A preview URL that you can build from the pull request number or the
   branch, or a deploy step in the same job that prints the URL: a workflow
   on `pull_request`, as in "When you know the preview URL".

@@ -387,6 +387,14 @@ jobs:
               -f check_name="$CHECK_NAME" --jq '.check_runs[0] // empty')
             status=$(jq -r '.status // empty' <<<"$run")
             if [ "$status" = completed ]; then break; fi
+            # Still no check of that name after 5 minutes, so the name is
+            # probably wrong. Show the names that are there.
+            if [ -z "$run" ] && [ "$i" -ge 30 ]; then
+              names=$(gh api --method GET "repos/$GITHUB_REPOSITORY/commits/$SHA/check-runs" \
+                -f per_page=100 --jq '[.check_runs[].name] | unique | join(", ")')
+              echo "No check named \"$CHECK_NAME\" on $SHA after 5 minutes. The checks on this commit are: ${names:-none}. Set CHECK_NAME to the name of Cloudflare's check." >&2
+              exit 1
+            fi
             sleep 10
           done
           if [ "$status" != completed ]; then
@@ -438,7 +446,9 @@ Before you use it, set the two values at the top:
 - `CHECK_NAME` is the name of Cloudflare's check. Cloudflare's docs do not
   give it, and a repository with several Pages projects has one check for
   each. To see the names, select the status icon next to a commit on
-  GitHub. Copy the name of the Pages check into `CHECK_NAME`.
+  GitHub. Copy the name of the Pages check into `CHECK_NAME`. If you get
+  it wrong, the step stops after 5 minutes and prints the names of the
+  checks on the commit.
 
 The job needs `checks: read` to see the check, and `GH_TOKEN` lets the
 GitHub CLI use the job's token. The GitHub CLI is installed on
@@ -450,10 +460,11 @@ alias by the rules above. Cloudflare's docs do not say what happens to very
 long branch names. If the preview does not answer, open the build in the
 Cloudflare dashboard. **View build** shows all aliases of the deployment.
 
-The job fails when the build fails, and when no finished check shows up
-within 15 minutes. That also happens when Cloudflare does not build the
-commit, for example because of build watch paths or a `[CI Skip]` commit
-message. Then Cloudflare creates no check.
+The job fails when the build fails. It also fails when no check named
+`CHECK_NAME` shows up within 5 minutes, and when the check does not finish
+within 15 minutes. A missing check can also mean that Cloudflare does not
+build the commit, for example because of build watch paths or a
+`[CI Skip]` commit message. Then Cloudflare creates no check.
 
 ## Build the site inside the job
 
