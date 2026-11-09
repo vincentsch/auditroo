@@ -40,7 +40,12 @@ fn help_has_descriptions_defaults_and_examples() {
         .args(["compare", "--help"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("<PRODUCTION_URL> <PREVIEW_URL>"));
+        .stdout(predicate::str::contains("<PRODUCTION_URL> <PREVIEW_URL>"))
+        // Two local copies of one site need the live site, so the help
+        // shows how.
+        .stdout(predicate::str::contains(
+            "auditroo compare http://localhost:4000 http://localhost:4001 --production-url https://example.com",
+        ));
 }
 
 #[test]

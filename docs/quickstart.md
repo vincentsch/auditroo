@@ -153,10 +153,16 @@ its sitemap or canonical tags, auditroo reads those URLs on the preview,
 under the same path. URLs on any other host, such as a staging server, are
 reported.
 
-When you compare two local copies of your live site, both still use the
-live domain. Pass it as `--production-url https://www.example.com`, so its
-URLs count as the copies' own. Without it, the output says above the
-findings that the result is incomplete and names the flag.
+When you compare two local copies of your live site, for example a build
+of `main` and a build of your branch, both still use the live domain. Pass
+it with `--production-url`, so its URLs count as the copies' own:
+
+```sh
+auditroo compare http://localhost:4000 http://localhost:4001 --production-url https://www.example.com
+```
+
+Without it, the first line says `FAIL (incomplete)` or `PASS (incomplete)`,
+and a line above the findings names the flag.
 
 ## Compare with a saved snapshot
 

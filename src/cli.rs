@@ -130,8 +130,9 @@ auditroo reads them on the preview under the same path. URLs on any other
 host are reported.
 
 When both sites are local copies of your live site, pass the live site with
---production-url. Otherwise most pages do not count as indexable, and the
-output says so above the findings.
+--production-url, as in the last example. Otherwise most pages do not count
+as indexable. The first line then says (incomplete), and a line above the
+findings names the flag.
 
 When the preview's robots.txt blocks pages that production's robots.txt
 allows, auditroo reports the block and still checks those pages on the
@@ -141,6 +142,7 @@ Examples:
   auditroo compare https://example.com https://my-branch.example.vercel.app
   auditroo compare https://example.com http://localhost:4321
   auditroo compare https://example.com \"$PREVIEW_URL\" --header 'x-vercel-protection-bypass: ${BYPASS}'
+  auditroo compare http://localhost:4000 http://localhost:4001 --production-url https://example.com
 
 The --header value is in single quotes, so the shell does not expand
 ${BYPASS}. auditroo reads it from the environment itself, and the secret
