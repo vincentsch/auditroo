@@ -27,6 +27,8 @@ pub mod demo;
 #[doc(hidden)]
 pub mod error;
 #[doc(hidden)]
+pub mod explain;
+#[doc(hidden)]
 pub mod external;
 #[doc(hidden)]
 pub mod extract;

@@ -90,6 +90,9 @@ enum Command {
     /// Compare a small built-in site with a broken copy of it. No network needed.
     #[command(after_help = DEMO_HELP)]
     Demo(DemoCommand),
+    /// Show what a rule checks and what to do about its findings.
+    #[command(after_help = EXPLAIN_HELP)]
+    Explain(ExplainCommand),
     /// Experimental: show which pages of a snapshot your custom checks in auditroo.toml cover.
     Assert(AssertCommand),
     /// Experimental: show ready-made custom checks and copy them into auditroo.toml.
@@ -179,6 +182,14 @@ Examples:
   auditroo demo
   auditroo demo --html demo-report.html";
 
+const EXPLAIN_HELP: &str = "\
+The text is the rule's section of docs/findings.md. Without a rule, explain
+lists every rule id.
+
+Examples:
+  auditroo explain title_changed
+  auditroo explain";
+
 #[derive(Debug, Args)]
 struct CheckCommand {
     /// Start URL, for example https://example.com.
@@ -255,6 +266,13 @@ struct ReportArgs {
 struct DemoCommand {
     #[command(flatten)]
     output: OutputArgs,
+}
+
+#[derive(Debug, Args)]
+struct ExplainCommand {
+    /// Rule id, as the output shows it under each finding, for example
+    /// title_changed.
+    rule: Option<String>,
 }
 
 /// Rules that change how findings are evaluated.
@@ -825,6 +843,13 @@ async fn execute(cli: Cli) -> Result<i32, CliError> {
         Command::Snapshot(command) => execute_snapshot(command).await,
         Command::Report(command) => execute_report(command),
         Command::Demo(command) => crate::demo::run(command.output).await,
+        Command::Explain(command) => {
+            match command.rule {
+                Some(rule) => print!("{}", crate::explain::explain(&rule)?),
+                None => print!("{}", crate::explain::list()),
+            }
+            Ok(EXIT_OK)
+        }
         Command::Assert(command) => execute_assert(command),
         Command::Recipes(command) => execute_recipes(command),
         Command::Logs(command) => execute_logs(command),

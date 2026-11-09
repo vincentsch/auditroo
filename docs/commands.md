@@ -267,6 +267,27 @@ Examples:
   auditroo demo --html demo-report.html
 ```
 
+## auditroo explain
+
+Show what a rule checks and what to do about its findings.
+
+```text
+auditroo explain [RULE]
+```
+
+| Option | What it does |
+| --- | --- |
+| `<RULE>` | Rule id, as the output shows it under each finding, for example title_changed. |
+
+```text
+The text is the rule's section of docs/findings.md. Without a rule, explain
+lists every rule id.
+
+Examples:
+  auditroo explain title_changed
+  auditroo explain
+```
+
 ## auditroo assert
 
 Experimental: show which pages of a snapshot your custom checks in auditroo.toml cover.

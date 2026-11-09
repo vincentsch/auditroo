@@ -110,6 +110,45 @@ fn demo_shows_a_failing_comparison_without_network() {
         ));
 }
 
+#[test]
+fn explain_prints_the_findings_docs_for_a_rule() {
+    let dir = tempfile::tempdir().unwrap();
+    let docs = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/findings.md"),
+    )
+    .unwrap();
+    assert!(docs.contains("**Medium.** The page has a different `<title>`."));
+    // The id as the output shows it works too.
+    for name in ["title_changed", "rule: title_changed"] {
+        auditroo(&dir)
+            .args(["explain", name])
+            .assert()
+            .success()
+            .stdout(predicate::str::starts_with(
+                "title_changed\n\nMedium. The page has a different <title>.",
+            ))
+            .stdout(predicate::str::contains(
+                "What to do: check that the new title still describes the page.",
+            ))
+            .stdout(predicate::str::contains(
+                "A run fails on high and critical findings, unless you change --fail-on.",
+            ))
+            .stdout(predicate::str::contains("findings.md#title_changed"));
+    }
+    auditroo(&dir)
+        .arg("explain")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\nIndexing\n  noindex_added\n"));
+    auditroo(&dir)
+        .args(["explain", "title_change"])
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains(
+            "there is no rule \"title_change\"",
+        ));
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn check_compare_and_report_against_the_demo_sites() {
     let production = DemoServer::start(Variant::Production).await.unwrap();
