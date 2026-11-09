@@ -72,8 +72,9 @@ the user.
 
 Read the output and summarize it for the user in plain words. Start with
 critical and high findings. `docs/findings.md` in the auditroo repository
-explains each rule id and what to do about it. The text output shows the
-rule id under each finding, for example `rule: canonical_external`. If you
+explains each rule id and what to do about it, and `auditroo explain
+<rule>` prints the same text. The text output shows the rule id under each
+finding, for example `rule: canonical_external`. If you
 want the result as data, add `--out report.json`. `docs/json.md` describes
 its fields. Do not change the site to fix findings unless the user asks you
 to.
@@ -103,6 +104,13 @@ Pick the recipe from `docs/ci.md` that fits the project:
   `compare` against the preview URL from the event.
 - A host that creates GitHub deployments for its previews: the same
   workflow.
+- Cloudflare Pages without GitHub deployments: the "Cloudflare Pages"
+  workflow. It waits for Cloudflare's check on the pull request's commit.
+  It needs the Pages project name and the name of that check. If the GitHub
+  CLI is logged in, `gh api repos/OWNER/REPO/commits/main/check-runs --jq
+  '.check_runs[].name'` lists the check names of the latest commit on
+  `main`. Otherwise ask the user to copy the name from a commit's checks on
+  GitHub.
 - A preview URL that you can build from the pull request number or the
   branch, or a deploy step in the same job that prints the URL: a workflow
   on `pull_request`, as in "When you know the preview URL".
@@ -116,8 +124,12 @@ When you write the workflow:
 - Use the GitHub Action `vincentsch/auditroo` with the latest release tag,
   for example `vincentsch/auditroo@v0.1.0`. Check the releases page for the
   current tag. The action installs the auditroo release of the same version.
-- When the project has an `auditroo.toml`, add `actions/checkout` before the
-  auditroo step, so the job reads it. `docs/ci.md` shows how.
+- Check out the base branch before the auditroo step, not the pull
+  request, as the recipes in `docs/ci.md` do. auditroo then reads the
+  `auditroo.toml` that was already reviewed. With the pull request's own
+  copy, a pull request could add ignore rules that hide its own problems.
+  "Ignore rules and pull requests" in `docs/ci.md` explains it. Tell the
+  user that changes to the workflow file and `auditroo.toml` need a review.
 - Pass values from the event, such as the preview URL, through `env` and
   refer to them as `"$PREVIEW_URL"` in `args`. Never put `${{ ... }}`
   expressions straight into `args`.
@@ -148,6 +160,17 @@ ignore = [
 Never ignore a whole rule such as `noindex_added` or `robots_blocked` for
 every URL without the user's clear agreement.
 
+Tell the user two things about the new rule:
+
+- With the base branch checkout from step 4, the rule counts once it is
+  merged. Until then the pull request check still sees the finding.
+- A medium or low finding, such as `title_changed`, does not fail a run
+  with the default `--fail-on high`. The rule then only marks the finding
+  as expected. `auditroo explain <rule>` shows a rule's severity.
+
+The text output lists ignored findings under "Ignored", so you can check
+that the rule matched.
+
 ## 6. Check your work and report
 
 If you can, run the same comparison locally once, against a preview URL or
@@ -158,6 +181,9 @@ auditroo compare https://www.example.com http://localhost:4321
 ```
 
 Use the default crawl speed, because `compare` also crawls production.
+When you compare two local copies of the site, and the output says "This
+result is incomplete, because both sites point their canonical tags or
+sitemap at ...", run it again with the `--production-url` it names.
 
 Then tell the user:
 

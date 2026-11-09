@@ -69,15 +69,25 @@ staging server, is still reported.
 When you compare two builds that both contain the live site's URLs, for
 example a build of `main` and a build of a pull request, every canonical tag
 names a host that auditroo does not know. It then treats no page as one that
-Google may index, so most rules have nothing to look at. The report has a note
-about it. Name the live site, and both builds count its URLs as their own. Set
-`production_url` in the `[crawl]` section of `auditroo.toml`, or pass the
-flag:
+Google may index, so most rules have nothing to look at. The output says so
+above the findings, with the host to pass:
+
+```text
+This result is incomplete, because both sites point their canonical tags or sitemap at https://www.example.com, which is neither of them. If both are copies of that site, run again with --production-url https://www.example.com.
+```
+
+The JSON report has the host in `suggested_production_url`. Name the live
+site, and both builds count its URLs as their own. Set `production_url` in
+the `[crawl]` section of `auditroo.toml`, or pass the flag:
 
 ```sh
+auditroo compare http://localhost:4000 http://localhost:4001 --production-url https://www.example.com
 auditroo snapshot http://localhost:4000 --production-url https://www.example.com --out main.json
 auditroo diff http://localhost:4001 --baseline main.json --production-url https://www.example.com
 ```
+
+In `compare` the setting applies to both builds. When production is the
+live site itself, it changes nothing on that side.
 
 ## Many pages return 403 or 429
 

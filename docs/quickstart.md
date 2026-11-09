@@ -78,6 +78,7 @@ the findings by severity, and the ones below the fail-on level come last.
 Under each finding that fails the run, a line says what to do. Each finding
 also has a line that names its rule, for example `rule: noindex_added`. You
 need that name when you want to ignore a finding.
+`auditroo explain noindex_added` says what a rule checks and what to do.
 Add `--html demo.html` to write the same report as a web page.
 
 The demo itself exits with code 0, so you can run it anywhere. A real
@@ -151,6 +152,11 @@ develop. If the preview still uses the production domain, for example in
 its sitemap or canonical tags, auditroo reads those URLs on the preview,
 under the same path. URLs on any other host, such as a staging server, are
 reported.
+
+When you compare two local copies of your live site, both still use the
+live domain. Pass it as `--production-url https://www.example.com`, so its
+URLs count as the copies' own. Without it, the output says above the
+findings that the result is incomplete and names the flag.
 
 ## Compare with a saved snapshot
 

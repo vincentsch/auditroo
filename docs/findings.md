@@ -8,7 +8,8 @@ This page explains each rule and what to do about it. The text output
 shows the rule id under each finding (`rule: noindex_added`). For each
 finding that fails the run, the text output and the job summary also show
 the first sentence of the advice. The HTML report shows the full advice
-next to each finding.
+next to each finding. `auditroo explain noindex_added` prints the section
+of this page for one rule in your terminal.
 
 ## What the SEO terms mean
 
@@ -57,7 +58,10 @@ A preview build usually contains production URLs, for example in its
 canonical tags and its sitemap. When auditroo knows production, it reads
 those URLs on the preview, under the same path. The preview's own pages are
 fetched, never production's. When you compare two local builds that both
-contain the live site's URLs, pass that site with `--production-url`.
+contain the live site's URLs, pass that site with `--production-url`. If
+you leave it out, auditroo says so above the findings and names the host to
+pass. It does that when most canonical tags or sitemap URLs on both sites
+name the same host, and that host is neither of them.
 
 Every other host counts as foreign. A canonical tag or a sitemap entry on a
 staging host is reported, even when the whole build names that host. A
@@ -90,8 +94,11 @@ ignore = [
 ]
 ```
 
-Ignored findings stay in the report, marked as ignored. They do not fail
-the run. [Configuration](configuration.md) has more on ignore rules.
+`title_changed` is a medium finding, so with the default `--fail-on high`
+it never fails a run. This rule matters once you fail on `medium` or
+lower. Ignored findings stay in the report, marked as ignored, and the text
+output lists them under "Ignored". They do not fail the run.
+[Configuration](configuration.md) has more on ignore rules.
 
 ## Indexing
 
@@ -478,7 +485,8 @@ them does not fail a run by default.
 ### `robots_blocked`
 
 **Critical** when Googlebot is affected. Otherwise the severity of the most
-important crawler in the table above. robots.txt now blocks a crawler from
+important crawler it blocks, from the crawler table in the robots.txt part
+of docs/findings.md. robots.txt now blocks a crawler from
 indexable pages that it could crawl before. Crawlers with the same blocked
 pages share one finding. A new `Disallow: /` shows up as every page being
 blocked. The finding's URL is the robots.txt file, and it lists the blocked

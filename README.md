@@ -195,8 +195,10 @@ too, so auditroo would also crawl the pages that your live robots.txt
 blocks for it. Pages that only the preview's robots.txt blocks are checked
 without the flag.
 
-[CI recipes](docs/ci.md) has more setups, for example for a preview URL
-that you know in advance, or for a preview behind password protection.
+If you add an `auditroo.toml`, check it out from your main branch in the
+workflow. Then a pull request cannot add ignore rules that hide its own
+problems. [CI recipes](docs/ci.md) shows how, and has more setups, for
+example for Cloudflare Pages or for a preview behind password protection.
 
 ## What the findings mean
 
@@ -213,7 +215,8 @@ which is `high` unless you change it.
 
 Every finding in the output names its rule, for example
 `rule: title_changed`. Findings that fail the run also say what to do.
-[Findings](docs/findings.md) explains each rule in more detail. When a
+[Findings](docs/findings.md) explains each rule in more detail, and
+`auditroo explain title_changed` prints that text in the terminal. When a
 finding is expected, for example because you changed a title on purpose,
 add an ignore rule with that name to `auditroo.toml`, or pass
 `--ignore '{ rule = "title_changed" }'`. [Configuration](docs/configuration.md)

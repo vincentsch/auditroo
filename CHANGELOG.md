@@ -20,6 +20,8 @@ The first public release. It contains:
 - `auditroo demo` compares a built-in sample site with a broken copy, with
   no network access.
 - `auditroo report` prints a saved report again in any output format.
+- `auditroo explain <rule>` prints what a rule checks and what to do about
+  it, from the same text as `docs/findings.md`.
 
 ### Findings
 
@@ -66,6 +68,12 @@ The first public release. It contains:
   rules. Each finding that fails the run also has a line on what to do.
 - When some URLs were not checked, the output says so above the findings.
   The notes list the URLs that robots.txt kept auditroo from.
+- When both sites of a `compare` or `diff` point their canonical tags or
+  sitemap at the same other host, the output says above the findings that
+  `--production-url` with that host is probably missing.
+- Ignored findings are listed with their rule id and URL, under "Ignored"
+  in the text output and in the job summary. In JSON every finding has
+  `ignored`, also when it is `false`.
 - `--format markdown` for job summaries and pull request comments.
 - `--format github` for GitHub Actions annotations.
 - `--format json` for the full report as data. `docs/json.md` describes
@@ -82,8 +90,12 @@ The first public release. It contains:
   job summary and the annotations.
 - CI recipes in `docs/ci.md`:
   - Vercel previews
+  - Cloudflare Pages previews, which wait for Cloudflare's check on the
+    commit
   - preview URLs that you know in advance
   - builds served inside the CI job
+- The recipes read `auditroo.toml` from the base branch, so a pull request
+  cannot add ignore rules that hide its own problems.
 - Release binaries for the three desktop systems on x86_64 and arm64, with
   SHA-256 checksums and build provenance. The Linux binaries are static.
 - The GitHub Action installs the auditroo release of its own version unless

@@ -62,7 +62,8 @@ findings:
       "rule": "noindex_added",
       "severity": "critical",
       "url": "http://127.0.0.1:39089/coffee/ethiopia-yirgacheffe/",
-      "message": "now has noindex (robots meta tag \"noindex\")"
+      "message": "now has noindex (robots meta tag \"noindex\")",
+      "ignored": false
     },
     {
       "rule": "robots_blocked",
@@ -76,7 +77,8 @@ findings:
       "group": "Googlebot and 9 other crawlers",
       "details": [
         "crawlers: Googlebot, Bingbot, OAI-SearchBot (ChatGPT search), ChatGPT-User, PerplexityBot, Claude-SearchBot, GPTBot (OpenAI training), ClaudeBot (Anthropic training), Google-Extended (Gemini training), CCBot (Common Crawl)"
-      ]
+      ],
+      "ignored": false
     },
     {
       "rule": "title_changed",
@@ -85,14 +87,16 @@ findings:
       "message": "has a new title",
       "before": "\"Contact | Harbor Coffee Roasters\"",
       "after": "\"Contact us | Harbor Coffee Roasters\"",
-      "group": "\"Contact us | Harbor Coffee Roasters\""
+      "group": "\"Contact us | Harbor Coffee Roasters\"",
+      "ignored": false
     }
   ]
 }
 ```
 
-auditroo leaves out fields that are empty, `false` or 0. Read them with a
-default, for example `.notes // []` in jq.
+auditroo leaves out fields that are empty or 0. Read them with a default,
+for example `.notes // []` in jq. `ignored` is always there, as `true` or
+`false`.
 
 ## The summary fields
 
@@ -110,6 +114,7 @@ default, for example `.notes // []` in jq.
 | `counts` | The number of findings per severity, such as `"high": 3`. `ignored` counts the findings that matched an ignore rule. They are not counted under their severity. |
 | `notes` | Plain sentences about what auditroo could not check, or about what it did for you, such as ignoring a preview's noindex header. |
 | `not_compared` | The number of indexable baseline pages that the current crawl did not reach, for example because of `--max-pages`. |
+| `suggested_production_url` | In `compare` and `diff`: the host that most canonical tags or sitemap URLs on both sites name, when it is neither of the two sites. auditroo then counts most pages as not indexable, so most rules have nothing to check. Run again with this URL as `--production-url`. |
 | `findings` | Every finding, the ignored ones included. The section after next lists the fields. |
 | `ignore_rules` | The ignore rules of this run, from `auditroo.toml` and `--ignore`. |
 | `quality` | Results of quality budgets, an [experimental feature](experimental.md). |
@@ -136,13 +141,14 @@ files block, and URLs that a new rule for auditroo itself blocks.
 
 ## When the result is incomplete
 
-A run can pass although auditroo did not see every page. The text output
-then says "This result is incomplete" above the findings, and the notes say
-why. In the JSON report, any of these means the same:
+A run can pass although auditroo did not see every page, or although most
+rules had nothing to check. The text output then says "This result is
+incomplete" above the findings, and the notes say why. In the JSON report, any of these means the same:
 
 - `current.robots_denied` is not empty.
 - `current.truncated` is `true`.
 - `not_compared` is greater than 0.
+- `suggested_production_url` is set.
 
 ## The finding fields
 
@@ -160,7 +166,7 @@ why. In the JSON report, any of these means the same:
 | `details` | More lines for people, such as the crawlers that a robots.txt rule blocks. |
 | `follow_on` | Rule ids of other changes on the same page that come from this finding. A page that now returns an error also loses its title, for example. Those changes are not listed as findings of their own. |
 | `check_id` | For the rules `assertion` and `quality_budget`, the id of the custom check or budget in `auditroo.toml`. Ignore rules match it as `assertion`. |
-| `ignored` | `true` when an ignore rule matched the finding. |
+| `ignored` | `true` when an ignore rule matched the finding, `false` otherwise. Every finding has it. |
 | `impact` | Traffic numbers for the URL, from the experimental impact feature. |
 
 The findings are sorted. Findings that are not ignored come first, and

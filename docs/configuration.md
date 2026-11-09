@@ -44,7 +44,7 @@ ignore = [
 | `include` | `[]` | Only crawl paths that match one of these patterns. |
 | `exclude` | `[]` | Do not crawl paths that match one of these patterns. |
 | `sitemaps` | `[]` | Read these sitemap URLs instead of the ones robots.txt names. A sitemap is the XML file that lists your pages for search engines, and robots.txt is the file with the rules for crawlers. |
-| `production_url` | none | The live site, when you crawl a preview or a local build of it, for example `"https://www.example.com"`. Its URLs count as the crawled site's own, for example in the sitemap or in canonical tags (the tag that names the URL Google should show for a page). `--production-url` overrides it. |
+| `production_url` | none | The live site, when you crawl a preview or a local build of it, for example `"https://www.example.com"`. Its URLs count as the crawled site's own, for example in the sitemap or in canonical tags (the tag that names the URL Google should show for a page). `--production-url` overrides it. In `compare` it applies to both sites. When the production side is the live site itself, as in CI, it changes nothing there. |
 | `user_agent` | `auditroo/<version> (+https://github.com/vincentsch/auditroo)` | The User-Agent header. |
 | `headers` | `[]` | Extra request headers, as `{ name = "...", value = "..." }`. |
 | `respect_robots` | `true` | Set to `false` to crawl pages that robots.txt blocks for auditroo. Same as `--ignore-robots`. In `compare` it applies to production too. |
@@ -108,6 +108,12 @@ ignore = [
 The last rule ignores every `robots_blocked` finding, including one for
 Googlebot. Use it only when you are sure.
 
+The first rule changes nothing with the default settings. `title_changed`
+is a medium finding, and a run fails only on high and critical findings
+unless you change `fail_on`. Its ignore rule starts to matter with
+`fail_on = "medium"` or lower. Run `auditroo explain title_changed` to see
+the severity of a rule and what it checks.
+
 On the command line, write the rule as a TOML table:
 
 ```sh
@@ -115,9 +121,18 @@ auditroo compare https://www.example.com "$PREVIEW_URL" \
   --ignore '{ rule = "title_changed", url = "/blog/*" }'
 ```
 
-Ignored findings still appear in every report format, marked as ignored.
-An ignore rule that names an unknown rule id stops the run with exit code 2,
-so a typo does not hide findings by accident.
+Ignored findings do not fail a run, but auditroo still shows them. The
+text output lists them under "Ignored" with their rule id and URL. The
+other report formats mark them as ignored, and in the JSON report every
+finding has `"ignored": true` or `false`. Only the GitHub annotations leave
+them out. An ignore rule that names an unknown rule id
+stops the run with exit code 2, so a typo does not hide findings by
+accident.
+
+In a pull request check, read `auditroo.toml` from the base branch.
+Otherwise a pull request can add ignore rules that hide its own problems.
+[Ignore rules and pull requests](ci.md#ignore-rules-and-pull-requests)
+shows how.
 
 ## Other sections
 
