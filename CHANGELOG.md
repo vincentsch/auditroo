@@ -4,7 +4,7 @@ All notable changes to auditroo are listed here. Version headings look like
 `## 0.1.0 (2026-11-02)`. The release workflow copies the section of a
 version into its release notes.
 
-## Unreleased
+## 0.1.0 (2026-11-09)
 
 The first public release. It contains:
 
