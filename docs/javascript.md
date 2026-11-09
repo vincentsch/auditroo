@@ -26,7 +26,7 @@ rendered crawl.
 ## Get a build with rendering
 
 The release binaries do not include rendering. Build auditroo from source
-with the `browser` feature. You need Rust 1.88 or newer:
+with the `browser` feature. You need Rust 1.89 or newer:
 
 ```sh
 cargo install --locked --features browser --git https://github.com/vincentsch/auditroo

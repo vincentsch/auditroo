@@ -6,7 +6,7 @@ how to add a rule. For setting up auditroo in another project, see
 
 ## Build
 
-You need Rust 1.88 or newer.
+You need Rust 1.89 or newer.
 
 ```sh
 cargo build --locked
@@ -30,9 +30,9 @@ cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked --all-targets
 cargo clippy --locked --all-targets --features browser -- -D warnings
 cargo test --locked --all-targets --features browser
-cargo +1.88.0 check --locked --all-targets
-cargo +1.88.0 check --locked --all-targets --features browser
-cargo +1.88.0 test --locked --all-targets
+cargo +1.89.0 check --locked --all-targets
+cargo +1.89.0 check --locked --all-targets --features browser
+cargo +1.89.0 test --locked --all-targets
 cargo audit --file Cargo.lock
 ```
 

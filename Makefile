@@ -17,8 +17,8 @@ fmt:
 	cargo fmt --all
 
 msrv:
-	cargo +1.88.0 test --locked --all-targets
-	cargo +1.88.0 check --locked --all-targets --features browser
+	cargo +1.89.0 test --locked --all-targets
+	cargo +1.89.0 check --locked --all-targets --features browser
 
 browser:
 	AUDITROO_REQUIRE_BROWSER_TESTS=1 cargo test --locked --all-targets --features browser

@@ -48,7 +48,7 @@ including Alpine. On Windows without Git Bash, download the `.exe` and
 compare its hash in PowerShell with `Get-FileHash -Algorithm SHA256` before
 you run it.
 
-To build from source you need Rust 1.88 or newer:
+To build from source you need Rust 1.89 or newer:
 
 ```sh
 cargo install --locked --git https://github.com/vincentsch/auditroo
