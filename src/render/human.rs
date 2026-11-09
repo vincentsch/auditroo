@@ -143,7 +143,7 @@ pub fn render(report: &Report, options: HumanOptions) -> String {
     if report.findings.is_empty() && report.command != ReportCommand::Check {
         if report.incomplete() {
             out.push_str(
-                "Nothing changed on the pages both crawls reached. Some pages were not compared. The notes say why.\n",
+                "Nothing changed that auditroo could check, but the result is incomplete. The notes say why.\n",
             );
         } else {
             out.push_str("Nothing changed that auditroo checks.\n");

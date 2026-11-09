@@ -106,6 +106,10 @@ the preview still uses production URLs, for example in canonical tags,
 auditroo reads them on the preview under the same path. URLs on any other
 host are reported.
 
+When both sites are local copies of your live site, pass the live site with
+--production-url. Otherwise most pages do not count as indexable, and the
+output says so above the findings.
+
 When the preview's robots.txt blocks pages that production's robots.txt
 allows, auditroo reports the block and still checks those pages on the
 preview. You do not need --ignore-robots for that.

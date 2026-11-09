@@ -13,7 +13,7 @@ use crate::analysis::{
 };
 use crate::audit::{
     compare_settings, crawl, crawl_notes, ensure_comparable, ensure_crawled, evaluate,
-    foreign_canonical_note, foreign_canonical_origin, start_problem, CrawlExtras, Evaluation,
+    start_problem, CrawlExtras, Evaluation, ForeignOrigin,
 };
 use crate::config::{
     parse_cli_field_map, resolve_bot_catalog, resolve_log_settings, resolve_settings,
@@ -125,6 +125,10 @@ the preview, so removed pages show up even when nothing links to them. When
 the preview still uses production URLs, for example in canonical tags,
 auditroo reads them on the preview under the same path. URLs on any other
 host are reported.
+
+When both sites are local copies of your live site, pass the live site with
+--production-url. Otherwise most pages do not count as indexable, and the
+output says so above the findings.
 
 When the preview's robots.txt blocks pages that production's robots.txt
 allows, auditroo reports the block and still checks those pages on the
@@ -1319,7 +1323,7 @@ pub fn snapshot_summary(snapshot: &Snapshot, saved_to: Option<&Path>) -> String 
     }
     for note in crawl_notes(snapshot)
         .into_iter()
-        .chain(foreign_canonical_origin(snapshot).map(|origin| foreign_canonical_note(&origin)))
+        .chain(ForeignOrigin::of(snapshot).map(|foreign| foreign.note()))
     {
         out.push_str(&format!("  Note: {note}\n"));
     }

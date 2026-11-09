@@ -866,6 +866,9 @@ async fn preview_build_with_production_urls_has_no_findings() {
         render(&report)
     );
     assert!(report.passed);
+    // Production is one of the two sites, so there is nothing to suggest.
+    assert_eq!(report.suggested_production_url, None);
+    assert!(!report.incomplete());
 }
 
 #[tokio::test]
@@ -1677,12 +1680,34 @@ async fn two_local_builds_of_one_site() {
         Severity::High,
         Some("/docs/faq/"),
     );
+    assert_eq!(report.suggested_production_url, None);
 
     // Not told, every page names another host as canonical. A new path on
     // that host is a changed canonical tag, not a new host, and a note says
     // how to tell auditroo about the live site.
     let baseline = crawl_site(&base, None).await;
     let report = diff_with(&baseline, &head).await;
+    // The robots.txt block is missed, because no page counts as indexable.
+    // So the output says up front which flag is missing.
+    assert!(findings(&report, Rule::RobotsBlocked).is_empty());
+    assert_eq!(
+        report.suggested_production_url.as_deref(),
+        Some(live_origin.as_str())
+    );
+    assert!(report.incomplete());
+    let text = render(&report);
+    let hint = text
+        .find(&format!(
+            "This result is incomplete, because both sites point their canonical tags or sitemap at {live_origin}, which is neither of them. If both are copies of that site, run again with --production-url {live_origin}.\n"
+        ))
+        .unwrap_or_else(|| panic!("no hint at the top:\n{text}"));
+    assert!(hint < text.find("\nHigh\n").expect("findings"), "{text}");
+    assert!(
+        auditroo::render::markdown::render(&report)
+            .contains("> [!WARNING]\n> This result is incomplete, because both sites point"),
+        "{}",
+        auditroo::render::markdown::render(&report)
+    );
     expect(
         &report,
         Rule::CanonicalChanged,
@@ -1702,6 +1727,76 @@ async fn two_local_builds_of_one_site() {
         "{:?}",
         report.notes
     );
+}
+
+#[tokio::test]
+async fn two_local_builds_with_the_live_sitemap() {
+    // The canonical tags are right, but robots.txt names the live sitemap,
+    // which lists the live site's URLs.
+    let live = DocsSite::new().serve(None).await;
+    let live_origin = origin_of(&live);
+    let mut build = DocsSite::new();
+    build.edit_pages(|html| {
+        html.replace(
+            "<link rel=\"canonical\" href=\"{{ORIGIN}}",
+            "<link rel=\"canonical\" href=\"",
+        )
+    });
+    let base = build.serve(Some(&live_origin)).await;
+    let head = build.serve(Some(&live_origin)).await;
+    let baseline = crawl_site(&base, None).await;
+    let report = diff_with(&baseline, &head).await;
+    assert_eq!(
+        report.suggested_production_url.as_deref(),
+        Some(live_origin.as_str()),
+        "{}",
+        render(&report)
+    );
+    assert!(
+        report
+            .notes
+            .iter()
+            .any(|note| note.starts_with(&format!("Most URLs in the sitemap are on {live_origin}"))),
+        "{:?}",
+        report.notes
+    );
+}
+
+#[tokio::test]
+async fn production_url_applies_to_both_sides_of_compare() {
+    // compare crawls both sites with the same settings. On the live site
+    // itself the setting changes nothing, and on a local copy of it the
+    // live URLs count as the copy's own.
+    let live = DocsSite::new().serve(None).await;
+    let copy = DocsSite::new().serve(Some(&origin_of(&live))).await;
+    let mut settings = settings();
+    settings.crawl.production_url = Some(live.url("/").to_string());
+    let crawl_with = |server: &FixtureSite| {
+        let start = server.url("/");
+        let settings = settings.clone();
+        async move {
+            crawl(
+                start,
+                &settings,
+                CrawlExtras::default(),
+                &mut Progress::quiet(),
+                "test",
+            )
+            .await
+            .unwrap()
+        }
+    };
+    let on_live = crawl_with(&live).await;
+    assert!(
+        on_live.production_urls.is_empty(),
+        "{:?}",
+        on_live.production_urls
+    );
+    let on_copy = crawl_with(&copy).await;
+    assert_eq!(on_copy.production_urls, vec![live.url("/").to_string()]);
+    assert!(on_copy
+        .site()
+        .is_indexable(&on_copy.records[&copy.url("/docs/").to_string()]));
 }
 
 #[tokio::test]

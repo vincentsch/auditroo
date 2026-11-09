@@ -396,32 +396,87 @@ pub fn ensure_comparable(snapshot: &Snapshot, what: &str) -> Result<(), CliError
     }
 }
 
+/// A host that a crawl uses as the site's address, in most canonical tags
+/// or most sitemap URLs, while auditroo does not count it as part of the
+/// site. That is either a build with the wrong site URL, or a local build or
+/// preview of that host that auditroo was not told about.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ForeignOrigin {
+    /// Most pages name this origin in their canonical tag.
+    Canonical(String),
+    /// Most URLs in the sitemap are on this origin.
+    Sitemap(String),
+}
+
+impl ForeignOrigin {
+    pub fn of(snapshot: &Snapshot) -> Option<Self> {
+        foreign_canonical_origin(snapshot)
+            .map(Self::Canonical)
+            .or_else(|| foreign_sitemap_origin(snapshot).map(Self::Sitemap))
+    }
+
+    pub fn origin(&self) -> &str {
+        match self {
+            Self::Canonical(origin) | Self::Sitemap(origin) => origin,
+        }
+    }
+
+    /// A note that says what auditroo could not check, and how to tell it
+    /// about the live site.
+    pub fn note(&self) -> String {
+        let (what, wrong) = match self {
+            Self::Canonical(origin) => (
+                format!("Most pages name {origin} in their canonical tag, so auditroo does not count them as indexable here."),
+                "the build uses the wrong site URL",
+            ),
+            Self::Sitemap(origin) => (
+                format!("Most URLs in the sitemap are on {origin}, so auditroo does not crawl them or compare them with the pages here."),
+                "the sitemap lists the wrong site URL",
+            ),
+        };
+        let origin = self.origin();
+        format!(
+            "{what} If this is a local build or a preview of {origin}, run auditroo with --production-url {origin}, so its URLs count as this site's own. If not, {wrong}."
+        )
+    }
+}
+
 /// The origin that most pages name in their canonical tag, when it is not
-/// part of the site. That is either a build with the wrong site URL, or a
-/// local build or preview that auditroo was not told about.
-pub fn foreign_canonical_origin(snapshot: &Snapshot) -> Option<String> {
+/// part of the site.
+fn foreign_canonical_origin(snapshot: &Snapshot) -> Option<String> {
     let site = snapshot.site();
     let pages: Vec<_> = snapshot
         .pages()
         .filter(|record| record.is_ok() && !record.navigation_changed() && !record.has_noindex())
         .collect();
-    let mut counts: BTreeMap<String, usize> = BTreeMap::new();
-    for record in &pages {
-        if let Some(canonical) = record.canonical.as_deref() {
-            if !site.contains(canonical) {
-                *counts.entry(origin_of(canonical)).or_default() += 1;
-            }
-        }
-    }
-    let (origin, count) = counts.into_iter().max_by_key(|(_, count)| *count)?;
-    (count >= 2 && count * 2 >= pages.len()).then_some(origin)
+    let canonicals = pages
+        .iter()
+        .filter_map(|record| record.canonical.as_deref());
+    most_common_foreign_origin(&site, canonicals, pages.len())
 }
 
-/// A note for crawls whose pages name another host as canonical.
-pub fn foreign_canonical_note(origin: &str) -> String {
-    format!(
-        "Most pages name {origin} in their canonical tag, so auditroo does not count them as indexable here. If this is a local build or a preview of {origin}, run auditroo with --production-url {origin}, so its URLs count as this site's own. If not, the build uses the wrong site URL."
+/// The origin of most sitemap URLs, when it is not part of the site.
+fn foreign_sitemap_origin(snapshot: &Snapshot) -> Option<String> {
+    let declared = &snapshot.sitemap.discovery.declared_urls;
+    most_common_foreign_origin(
+        &snapshot.site(),
+        declared.iter().map(String::as_str),
+        declared.len(),
     )
+}
+
+/// The foreign origin of at least two and at least half of `total` URLs.
+fn most_common_foreign_origin<'a>(
+    site: &crate::site::Site,
+    urls: impl Iterator<Item = &'a str>,
+    total: usize,
+) -> Option<String> {
+    let mut counts: BTreeMap<String, usize> = BTreeMap::new();
+    for url in urls.filter(|url| !site.contains(url)) {
+        *counts.entry(origin_of(url)).or_default() += 1;
+    }
+    let (origin, count) = counts.into_iter().max_by_key(|(_, count)| *count)?;
+    (count >= 2 && count * 2 >= total).then_some(origin)
 }
 
 /// URLs that the robots.txt note lists before "and N more". The JSON report
@@ -541,15 +596,22 @@ pub async fn evaluate(evaluation: Evaluation<'_>) -> Result<Report, CliError> {
             notes.push(note);
         }
     }
-    // Two builds that both name the same other host are builds of that
-    // site. A preview that newly names one is a wrong site URL, and the
+    // Two builds that both name the same other host are probably builds of
+    // that site, and most rules have little to check until auditroo knows
+    // it. A preview that newly names one has the wrong site URL, and the
     // findings say so, so no hint there.
-    if let Some(origin) = foreign_canonical_origin(current) {
-        let shared = baseline.is_none_or(|baseline| {
-            foreign_canonical_origin(baseline).as_deref() == Some(origin.as_str())
-        });
-        if shared {
-            notes.push(foreign_canonical_note(&origin));
+    let mut suggested_production_url = None;
+    if let Some(foreign) = ForeignOrigin::of(current) {
+        match baseline {
+            None => notes.push(foreign.note()),
+            Some(baseline) => {
+                if ForeignOrigin::of(baseline)
+                    .is_some_and(|other| other.origin() == foreign.origin())
+                {
+                    notes.push(foreign.note());
+                    suggested_production_url = Some(foreign.origin().to_owned());
+                }
+            }
         }
     }
 
@@ -581,6 +643,7 @@ pub async fn evaluate(evaluation: Evaluation<'_>) -> Result<Report, CliError> {
     });
     report.quality = quality_summaries;
     report.not_compared = not_compared;
+    report.suggested_production_url = suggested_production_url;
     apply_impact(
         &mut report,
         baseline.unwrap_or(current),

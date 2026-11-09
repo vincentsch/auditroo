@@ -241,6 +241,12 @@ pub fn incomplete_line(report: &Report) -> Option<String> {
     if !report.incomplete() {
         return None;
     }
+    // This one comes first, because one flag fixes it and it hides the most.
+    if let Some(url) = &report.suggested_production_url {
+        return Some(format!(
+            "This result is incomplete, because both sites point their canonical tags or sitemap at {url}, which is neither of them. If both are copies of that site, run again with --production-url {url}."
+        ));
+    }
     let denied = report.current.robots_denied.len();
     let (reason, more) = if denied > 0 {
         (

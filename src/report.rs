@@ -68,6 +68,12 @@ pub struct Report {
     /// example because of --max-pages or --include.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub not_compared: usize,
+    /// In compare and diff: the host that both crawls name in most of their
+    /// canonical tags or sitemap URLs, when it is neither of the two sites.
+    /// Most rules then have little to check, until auditroo runs again with
+    /// this URL as --production-url.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub suggested_production_url: Option<String>,
     pub findings: Vec<Finding>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ignore_rules: Vec<IgnoreRule>,
@@ -195,6 +201,7 @@ impl Report {
             counts: SeverityCounts::default(),
             notes: input.notes,
             not_compared: 0,
+            suggested_production_url: None,
             findings: input.findings,
             ignore_rules: input.gate.ignore.clone(),
             quality: None,
@@ -285,10 +292,13 @@ impl Report {
             .filter(move |finding| self.fails_gate(finding))
     }
 
-    /// Whether some URLs were not checked, so a pass does not mean the
-    /// whole site is fine.
+    /// Whether some URLs were not checked, or most rules had nothing to
+    /// check, so a pass does not mean the whole site is fine.
     pub fn incomplete(&self) -> bool {
-        !self.current.robots_denied.is_empty() || self.current.truncated || self.not_compared > 0
+        !self.current.robots_denied.is_empty()
+            || self.current.truncated
+            || self.not_compared > 0
+            || self.suggested_production_url.is_some()
     }
 
     pub fn exit_code(&self) -> i32 {
