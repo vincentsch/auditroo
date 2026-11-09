@@ -2,8 +2,8 @@
 
 The usual setup runs `auditroo compare` after each preview deployment. It
 compares the preview with production and fails the job when a change would
-hurt search. This page shows that setup for GitHub Actions with Vercel, and
-how to adapt it to other hosts and CI systems.
+hurt search. This page shows that setup for GitHub Actions with Vercel and
+with Cloudflare Pages, and how to adapt it to other hosts and CI systems.
 
 ## How a CI run passes or fails
 
@@ -73,21 +73,23 @@ installs the auditroo release that matches the action's version, so
 
 This job has no checkout step, so auditroo runs with its defaults and does
 not see an `auditroo.toml`. When you have settings there, such as ignore
-rules or crawl limits, check out the commit that was deployed before the
-auditroo step:
+rules or crawl limits, check out your main branch before the auditroo step:
 
 ```yaml
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.deployment.sha }}
+          ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
       - uses: vincentsch/auditroo@v0.1.0
         # ... as above
 ```
 
 auditroo reads `auditroo.toml` from the folder it runs in, which is the
-checkout. Pass `--config path/to/auditroo.toml` in `args` when the file
+checkout. This checkout has the main branch's copy of the file, not the
+pull request's, so a pull request cannot add ignore rules that hide its own
+problems. [Ignore rules and pull requests](#ignore-rules-and-pull-requests)
+explains why. Pass `--config path/to/auditroo.toml` in `args` when the file
 lives elsewhere.
 
 What you get on each preview:
@@ -157,6 +159,49 @@ With `fail: false` the step does not fail because of findings. It still
 fails when auditroo cannot finish, with exit code 2 or 3. Use the `passed`
 output to decide what happens next.
 
+## Ignore rules and pull requests
+
+auditroo reads `auditroo.toml` from the folder it runs in. When the job
+checks out the pull request, that is the pull request's own copy. A pull
+request can then add an ignore rule that hides its own problem, and the
+check passes.
+
+To prevent that, check out the base branch instead. Its `auditroo.toml`
+only has rules that were reviewed and merged:
+
+```yaml
+    steps:
+      - name: Check out the base branch for auditroo.toml
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.base_ref }}
+          persist-credentials: false
+      - uses: vincentsch/auditroo@v0.1.0
+        # ...
+```
+
+`github.base_ref` is the branch that the pull request wants to merge into.
+It only exists in workflows that run on `pull_request`. A `deployment_status`
+workflow uses `${{ github.event.repository.default_branch }}` instead, as
+the Vercel recipe above does. When the base branch has no `auditroo.toml`
+yet, auditroo runs with its defaults.
+
+Two things change with this setup:
+
+- An ignore rule in a pull request only counts once the pull request is
+  merged. When the check must pass before a merge, add the ignore rule in a
+  small pull request of its own first.
+- The pull request's own workflow file still runs, and a pull request can
+  change it. So have someone review changes to both files. A `CODEOWNERS`
+  file with lines for `/auditroo.toml` and `/.github/workflows/` names
+  those people. With the branch rule "Require review from Code Owners",
+  GitHub then needs their approval for such a change.
+
+When the job also builds the site, it needs the pull request's code too.
+Check out the base branch first, then the pull request into a folder of its
+own. [Build the site inside the job](#build-the-site-inside-the-job) shows
+how.
+
 ## robots.txt and --ignore-robots
 
 Leave `--ignore-robots` out of your CI workflow. In `compare` it applies to
@@ -182,6 +227,8 @@ host.
 - If your host creates GitHub deployments for its previews, the Vercel
   workflow works as it is. The pull request page then shows an entry such
   as "deployed to Preview" with a link.
+- Cloudflare Pages reports its builds as checks on the commit instead.
+  [Cloudflare Pages](#cloudflare-pages) has a workflow for that.
 - Netlify and Cloudflare Pages also add the noindex header to previews.
   auditroo ignores it on `*.netlify.app` and `*.pages.dev` hosts.
 - If you know the preview URL in advance, or an earlier step in the job
@@ -213,6 +260,12 @@ jobs:
       # The preview URL of this pull request. Change it to your host's pattern.
       PREVIEW_URL: https://pr-${{ github.event.pull_request.number }}.preview.example.com
     steps:
+      # auditroo.toml from the base branch, so the pull request cannot
+      # ignore its own problems.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.base_ref }}
+          persist-credentials: false
       - name: Wait for the preview
         run: |
           for i in $(seq 1 60); do
@@ -236,7 +289,9 @@ jobs:
 The wait only checks that the preview answers. If your host still serves
 the old build until the new one is ready, auditroo may check the old build.
 Then use the URL from the deploy step below, or the `deployment_status`
-workflow above.
+workflow above. On Cloudflare Pages, use the
+[Cloudflare Pages](#cloudflare-pages) workflow, which waits for the build
+of the commit.
 
 When a step of the same job deploys the preview and writes its URL as a
 step output, pass that output instead. Here the deploy step has
@@ -250,9 +305,155 @@ step output, pass that output instead. Here the deploy step has
           args: compare https://www.example.com "$PREVIEW_URL"
 ```
 
+Such a job checks out the pull request to deploy it, so auditroo would read
+the pull request's `auditroo.toml`. To read the base branch's file instead,
+check out the base branch into a folder of its own, and point auditroo at
+it. This needs an `auditroo.toml` on the base branch, because a file that
+you name with `--config` must exist:
+
+```yaml
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.base_ref }}
+          path: base
+          persist-credentials: false
+      - uses: vincentsch/auditroo@v0.1.0
+        env:
+          PREVIEW_URL: ${{ steps.deploy.outputs.url }}
+        with:
+          args: compare https://www.example.com "$PREVIEW_URL" --config base/auditroo.toml
+```
+
 If every pull request deploys to the same staging URL, save that URL as a
 repository variable, for example `STAGING_URL`. Then set
 `PREVIEW_URL: ${{ vars.STAGING_URL }}` in the first workflow.
+
+## Cloudflare Pages
+
+Cloudflare Pages builds a preview for each pull request from your own
+repository. When your project does not create GitHub deployments, a
+`deployment_status` workflow never runs. But Cloudflare reports each build
+as a check on the commit. This workflow waits for that check and then
+compares the preview with production.
+
+Cloudflare's docs describe two addresses for a preview:
+
+- Each build has its own address, `<hash>.<project>.pages.dev`.
+- Each branch has an alias, `<branch>.<project>.pages.dev`. It always
+  points to the build of the branch's latest commit. In the alias, the
+  branch name is in lower case, and every character that is not a letter
+  or a digit becomes a hyphen. So the branch `fix/api` gets
+  `fix-api.<project>.pages.dev`.
+
+An answer from the alias does not tell you which commit it serves, so the
+workflow waits for Cloudflare's check on the pull request's commit first:
+
+```yaml
+# .github/workflows/seo.yml
+name: SEO
+on: pull_request
+
+permissions:
+  contents: read
+  checks: read
+
+jobs:
+  auditroo:
+    # Cloudflare Pages builds no preview for pull requests from forks.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    env:
+      # Your Pages project, the <project> in <project>.pages.dev.
+      PAGES_PROJECT: example
+      # The name of Cloudflare's check on your commits. Copy it from GitHub.
+      CHECK_NAME: Cloudflare Pages
+    steps:
+      # auditroo.toml from the base branch, so the pull request cannot
+      # ignore its own problems.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.base_ref }}
+          persist-credentials: false
+      - name: Wait for Cloudflare's build of this commit
+        id: preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          status=
+          for i in $(seq 1 90); do
+            run=$(gh api --method GET "repos/$GITHUB_REPOSITORY/commits/$SHA/check-runs" \
+              -f check_name="$CHECK_NAME" --jq '.check_runs[0] // empty')
+            status=$(jq -r '.status // empty' <<<"$run")
+            if [ "$status" = completed ]; then break; fi
+            sleep 10
+          done
+          if [ "$status" != completed ]; then
+            echo "No finished check named \"$CHECK_NAME\" on $SHA after 15 minutes." >&2
+            exit 1
+          fi
+          conclusion=$(jq -r '.conclusion' <<<"$run")
+          if [ "$conclusion" != success ]; then
+            echo "Cloudflare's build of $SHA ended with \"$conclusion\"." >&2
+            exit 1
+          fi
+          # A pages.dev address of the project from the check's text, if it
+          # has one. Otherwise the branch alias.
+          url=$(jq -r '[.output.title, .output.summary, .output.text] | map(. // "") | join(" ")' <<<"$run" \
+            | grep -oE "https://[a-z0-9-]+\.$PAGES_PROJECT\.pages\.dev" | head -n 1 || true)
+          if [ -z "$url" ]; then
+            alias=$(printf '%s' "$BRANCH" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g')
+            url="https://$alias.$PAGES_PROJECT.pages.dev"
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+      - name: Wait for the preview to answer
+        env:
+          PREVIEW_URL: ${{ steps.preview.outputs.url }}
+        run: |
+          for i in $(seq 1 12); do
+            curl -fsS -o /dev/null "$PREVIEW_URL" && exit 0
+            sleep 5
+          done
+          echo "The preview at $PREVIEW_URL did not answer. Cloudflare shows the address under View build." >&2
+          exit 1
+      - uses: vincentsch/auditroo@v0.1.0
+        env:
+          PREVIEW_URL: ${{ steps.preview.outputs.url }}
+        with:
+          args: compare https://www.example.com "$PREVIEW_URL"
+          html: auditroo-report.html
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: auditroo-report
+          path: auditroo-report.html
+          if-no-files-found: ignore
+```
+
+Before you use it, set the two values at the top:
+
+- `PAGES_PROJECT` is the name of your Pages project, as in
+  `https://<project>.pages.dev`.
+- `CHECK_NAME` is the name of Cloudflare's check. Cloudflare's docs do not
+  give it, and a repository with several Pages projects has one check for
+  each. To see the names, select the status icon next to a commit on
+  GitHub. Copy the name of the Pages check into `CHECK_NAME`.
+
+The job needs `checks: read` to see the check, and `GH_TOKEN` lets the
+GitHub CLI use the job's token. The GitHub CLI is installed on
+GitHub-hosted runners. The workflow needs no Cloudflare secret.
+
+The step takes the preview address from the check's text when it finds a
+`pages.dev` address of your project there. Otherwise it builds the branch
+alias by the rules above. Cloudflare's docs do not say what happens to very
+long branch names. If the preview does not answer, open the build in the
+Cloudflare dashboard. **View build** shows all aliases of the deployment.
+
+The job fails when the build fails, and when no finished check shows up
+within 15 minutes. That also happens when Cloudflare does not build the
+commit, for example because of build watch paths or a `[CI Skip]` commit
+message. Then Cloudflare creates no check.
 
 ## Build the site inside the job
 
@@ -271,21 +472,33 @@ jobs:
   auditroo:
     runs-on: ubuntu-latest
     steps:
+      # auditroo.toml from the base branch, so the pull request cannot
+      # ignore its own problems.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.base_ref }}
+          persist-credentials: false
+      # The pull request's code, in a folder of its own.
+      - uses: actions/checkout@v4
+        with:
+          path: pr
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - run: npm ci && npm run build
+        working-directory: pr
       - name: Serve the build
         run: |
-          npx --yes serve@14 dist --listen 4321 &
+          npx --yes serve@14 pr/dist --listen 4321 &
           for i in $(seq 1 30); do curl -fsS -o /dev/null http://localhost:4321/ && break; sleep 1; done
       - uses: vincentsch/auditroo@v0.1.0
         with:
           args: compare https://www.example.com http://localhost:4321
 ```
 
-The checkout also gives auditroo your `auditroo.toml`, if you have one.
+auditroo runs in the first checkout, so it reads the base branch's
+`auditroo.toml`, if there is one.
 
 Change `dist` to your build folder. A local server knows nothing about the
 redirects and headers that your host adds, so you may get findings about
